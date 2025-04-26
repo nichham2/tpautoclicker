@@ -20,7 +20,7 @@ click_thread = None
 afk_thread = None
 tray_icon = None
 
-VERSION = "1.0"
+VERSION = "3.0"
 UPDATE_URL = "https://example.com/version.txt"  # Replace with your link.
 SETTINGS_FILE = "settings.json"
 
