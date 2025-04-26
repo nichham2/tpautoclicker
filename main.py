@@ -21,7 +21,7 @@ afk_thread = None
 tray_icon = None
 
 VERSION = "3.0"
-UPDATE_URL = "https://example.com/version.txt"  # Replace with your link.
+UPDATE_URL = "https://github.com/nichham2/auto-clicker/blob/fbfcfa78aa861128053d3dd2f9b7ded268fdaa5b/version.txt"  # Replace with your link.
 SETTINGS_FILE = "settings.json"
 
 def check_for_update():
