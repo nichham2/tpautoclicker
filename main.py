@@ -194,7 +194,28 @@ def add_label_entry(label, var):
     ttk.Label(frame, text=label).pack(side="left")
     ttk.Entry(frame, textvariable=var).pack(side="right", expand=True, fill="x")
 
-add_label_entry("Hold Key:", hold_key_var)
+# Hold Key setting
+hold_key_frame = ttk.Frame(main_frame)
+hold_key_frame.pack(fill="x", pady=5)
+ttk.Label(hold_key_frame, text="Hold Key:").pack(side="left")
+hold_key_entry = ttk.Entry(hold_key_frame, textvariable=hold_key_var)
+hold_key_entry.pack(side="left", expand=True, fill="x", padx=5)
+
+def set_hold_key(event=None):
+    def capture_key(e):
+        key = e.name
+        hold_key_var.set(key.upper())
+        temp.destroy()
+    
+    temp = tk.Toplevel(root)
+    temp.title("Press a Key")
+    temp.geometry("300x100")
+    temp.configure(bg="#1e1e1e")
+    ttk.Label(temp, text="Press a key...", background="#1e1e1e", foreground="white").pack(expand=True)
+    temp.bind("<KeyPress>", capture_key)
+
+ttk.Button(hold_key_frame, text="Set Key", command=set_hold_key).pack(side="right")
+
 add_label_entry("Mouse Button:", mouse_button_var)
 add_label_entry("Click Speed (seconds):", speed_var)
 
