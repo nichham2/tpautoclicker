@@ -23,7 +23,7 @@ tray_icon = None
 current_hotkey = None
 setting_hold_key = False
 
-VERSION = "3.1"
+VERSION = "3.2"
 UPDATE_URL = "https://raw.githubusercontent.com/nichham2/auto-clicker/main/version.txt"
 SETTINGS_FILE = "settings.json"
 
@@ -42,11 +42,14 @@ def check_for_update():
 def clicker(hold_key, mouse_button, click_speed):
     global clicking
     while clicking:
-        if not keyboard.is_pressed(hold_key):
-            keyboard.press(hold_key)
+        # Only hold if user set one
+        if hold_key:
+            if not keyboard.is_pressed(hold_key):
+                keyboard.press(hold_key)
         mouse.click(mouse_button)
         time.sleep(click_speed)
-    if keyboard.is_pressed(hold_key):
+    # Release if we had held one
+    if hold_key and keyboard.is_pressed(hold_key):
         keyboard.release(hold_key)
 
 def afk_mover():
@@ -63,8 +66,7 @@ def start_clicking():
         sp = float(speed_var.get())
     except ValueError:
         return messagebox.showerror("Invalid Speed", "Speed must be a number.")
-    if not hk:
-        return messagebox.showerror("Missing Info", "Set a Hold Key first.")
+    # Note: hold-key is now optional
     clicking = True
     click_thread = threading.Thread(target=clicker, args=(hk, mb, sp), daemon=True)
     click_thread.start()
@@ -119,8 +121,7 @@ def create_tray_icon():
     d  = ImageDraw.Draw(img)
     d.rectangle((8,8,56,56), fill=(200,200,200))
     menu = (item('Open', show_window), item('Exit', quit_app))
-    icon = pystray.Icon("AutoClicker", img, "OP Auto Clicker", menu)
-    return icon
+    return pystray.Icon("AutoClicker", img, "OP Auto Clicker", menu)
 
 # ─── Settings Persistence ─────────────────────────────────────────────────────
 def save_settings():
@@ -140,9 +141,9 @@ def load_settings():
             hold_key_var.set(s.get("hold_key",""))
             mouse_button_var.set(s.get("mouse_button","Left"))
             speed_var.set(s.get("speed","0.05"))
-            hotkey = s.get("hotkey","F6")
-            hotkey_var.set(hotkey)
-            current_hotkey = hotkey
+            hk = s.get("hotkey","F6")
+            hotkey_var.set(hk)
+            current_hotkey = hk
             setup_hotkey()
 
 # ─── Hotkey Binding ────────────────────────────────────────────────────────────
@@ -176,7 +177,7 @@ def start_set_hold_key():
 
 # ─── GUI ──────────────────────────────────────────────────────────────────────
 root = tk.Tk()
-root.title("OP Auto Clicker 3.1")
+root.title("OP Auto Clicker 3.2")
 root.geometry("400x480")
 root.minsize(360,440)
 root.configure(bg="#ececec")
@@ -186,16 +187,16 @@ style.theme_use("clam")
 style.configure(".", background="#ececec", foreground="#000", fieldbackground="#fff")
 style.map("TButton", background=[('active','#ddd')])
 
-hold_key_var   = tk.StringVar()
+hold_key_var     = tk.StringVar()
 mouse_button_var = tk.StringVar(value="Left")
-speed_var      = tk.StringVar(value="0.05")
-status_var     = tk.StringVar(value="Status: Stopped")
-hotkey_var     = tk.StringVar(value="F6")
+speed_var        = tk.StringVar(value="0.05")
+status_var       = tk.StringVar(value="Status: Stopped")
+hotkey_var       = tk.StringVar(value="F6")
 
 main = ttk.Frame(root)
 main.pack(expand=True, fill="both", padx=15, pady=15)
 
-# — Hold Key —
+# — Hold Key (optional) —
 hkf = ttk.Frame(main); hkf.pack(fill="x", pady=5)
 ttk.Label(hkf, text="Hold Key:").pack(side="left")
 ttk.Entry(hkf, textvariable=hold_key_var).pack(side="left", expand=True, fill="x", padx=5)
@@ -256,10 +257,9 @@ afkf.columnconfigure(0,weight=1); afkf.columnconfigure(1,weight=1)
 # — Other Actions & Status —
 ttk.Button(main, text="Check for Updates", command=check_for_update).pack(fill="x", pady=5)
 ttk.Button(main, text="Save Settings",      command=save_settings).pack(fill="x", pady=5)
-ttk.Label(main, textvariable=status_var, font=('Segoe UI',10,'bold'))\
-    .pack(pady=10)
+ttk.Label(main, textvariable=status_var, font=('Segoe UI',10,'bold')).pack(pady=10)
 
-# — Final Setup —
+# ─── Final Setup ───────────────────────────────────────────────────────────────
 root.protocol("WM_DELETE_WINDOW", on_close)
 tray_icon = create_tray_icon()
 threading.Thread(target=tray_icon.run, daemon=True).start()
