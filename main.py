@@ -14,26 +14,30 @@ from plyer import notification
 import json
 import os
 
+# ─── Global State ─────────────────────────────────────────────────────────────
 clicking = False
 afk_mode = False
 click_thread = None
 afk_thread = None
 tray_icon = None
+current_hotkey = None
+setting_hold_key = False
 
-VERSION = "3.0"
-UPDATE_URL = "https://github.com/nichham2/auto-clicker/blob/fbfcfa78aa861128053d3dd2f9b7ded268fdaa5b/version.txt"  # Replace with your link.
+VERSION = "3.1"
+UPDATE_URL = "https://raw.githubusercontent.com/nichham2/auto-clicker/main/version.txt"
 SETTINGS_FILE = "settings.json"
 
+# ─── Core Functionality ────────────────────────────────────────────────────────
 def check_for_update():
     try:
-        response = requests.get(UPDATE_URL, timeout=5)
-        latest_version = response.text.strip()
-        if latest_version != VERSION:
-            messagebox.showinfo("Update Available", f"A new version ({latest_version}) is available!")
+        r = requests.get(UPDATE_URL, timeout=5)
+        latest = r.text.strip()
+        if latest != VERSION:
+            messagebox.showinfo("Update Available", f"New version: {latest}")
         else:
-            messagebox.showinfo("Up to Date", "You're using the latest version.")
-    except Exception:
-        messagebox.showwarning("Update Check Failed", "Could not check for updates.")
+            messagebox.showinfo("Up to Date", "You're on the latest version.")
+    except:
+        messagebox.showwarning("Update Check Failed", "Could not reach update server.")
 
 def clicker(hold_key, mouse_button, click_speed):
     global clicking
@@ -47,64 +51,60 @@ def clicker(hold_key, mouse_button, click_speed):
 
 def afk_mover():
     while afk_mode:
-        mouse.move(random.randint(-5, 5), random.randint(-5, 5), absolute=False, duration=0.2)
+        mouse.move(random.randint(-5,5), random.randint(-5,5),
+                   absolute=False, duration=0.2)
         time.sleep(30)
 
 def start_clicking():
     global clicking, click_thread
-    hold_key = hold_key_var.get()
-    mouse_button = mouse_button_var.get().lower()
+    hk = hold_key_var.get()
+    mb = mouse_button_var.get().lower()
     try:
-        click_speed = float(speed_var.get())
+        sp = float(speed_var.get())
     except ValueError:
-        messagebox.showerror("Invalid Speed", "Click speed must be a number!")
-        return
-
-    if not hold_key or not mouse_button:
-        messagebox.showerror("Missing Info", "Please fill in all fields.")
-        return
-
+        return messagebox.showerror("Invalid Speed", "Speed must be a number.")
+    if not hk:
+        return messagebox.showerror("Missing Info", "Set a Hold Key first.")
     clicking = True
-    click_thread = threading.Thread(target=clicker, args=(hold_key, mouse_button, click_speed), daemon=True)
+    click_thread = threading.Thread(target=clicker, args=(hk, mb, sp), daemon=True)
     click_thread.start()
-    status_var.set("Status: Clicking...")
-    winsound.Beep(1000, 150)
+    status_var.set("Status: Clicking…")
+    winsound.Beep(1000,150)
     notification.notify(title="Auto Clicker", message="Clicking Started", timeout=2)
 
 def stop_clicking():
     global clicking
     clicking = False
     status_var.set("Status: Stopped")
-    winsound.Beep(500, 150)
+    winsound.Beep(500,150)
     notification.notify(title="Auto Clicker", message="Clicking Stopped", timeout=2)
 
 def toggle_clicker(e=None):
-    if clicking:
-        stop_clicking()
-    else:
-        start_clicking()
+    if clicking: stop_clicking()
+    else:       start_clicking()
 
 def start_afk_mode():
     global afk_mode, afk_thread
     afk_mode = True
     afk_thread = threading.Thread(target=afk_mover, daemon=True)
     afk_thread.start()
-    status_var.set("Status: AFK Mode Active")
+    status_var.set("Status: AFK Mode")
 
 def stop_afk_mode():
     global afk_mode
     afk_mode = False
-    status_var.set("Status: AFK Mode Stopped")
+    status_var.set("Status: AFK Stopped")
 
-def set_speed(speed):
-    speed_var.set(str(speed))
+def set_speed(v):
+    speed_var.set(str(v))
+
+# ─── Tray & Window management ─────────────────────────────────────────────────
+def hide_window():
+    root.withdraw()
+    notification.notify(title="Auto Clicker", message="Minimized to Tray", timeout=2)
 
 def on_close():
     hide_window()
-
-def hide_window():
-    root.withdraw()
-    notification.notify(title="Auto Clicker", message="Running in background (Tray Icon)", timeout=2)
 
 def show_window(icon, item):
     icon.stop()
@@ -115,145 +115,153 @@ def quit_app(icon, item):
     root.destroy()
 
 def create_tray_icon():
-    image = Image.new('RGB', (64, 64), color=(73, 109, 137))
-    draw = ImageDraw.Draw(image)
-    draw.rectangle((8, 8, 56, 56), fill=(255, 255, 255))
-    
+    img = Image.new('RGB', (64,64), color=(30,30,30))
+    d  = ImageDraw.Draw(img)
+    d.rectangle((8,8,56,56), fill=(200,200,200))
     menu = (item('Open', show_window), item('Exit', quit_app))
-    icon = pystray.Icon("Minecraft AutoClicker", image, "Auto Clicker", menu)
+    icon = pystray.Icon("AutoClicker", img, "OP Auto Clicker", menu)
     return icon
 
+# ─── Settings Persistence ─────────────────────────────────────────────────────
 def save_settings():
-    settings = {
-        "hold_key": hold_key_var.get(),
-        "mouse_button": mouse_button_var.get(),
-        "speed": speed_var.get(),
-        "hotkey": hotkey_var.get()
-    }
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings, f)
+    with open(SETTINGS_FILE,'w') as f:
+        json.dump({
+            "hold_key": hold_key_var.get(),
+            "mouse_button": mouse_button_var.get(),
+            "speed": speed_var.get(),
+            "hotkey": hotkey_var.get()
+        }, f)
 
 def load_settings():
+    global current_hotkey
     if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, "r") as f:
-            settings = json.load(f)
-            hold_key_var.set(settings.get("hold_key", ""))
-            mouse_button_var.set(settings.get("mouse_button", "Left"))
-            speed_var.set(settings.get("speed", "0.05"))
-            hotkey_var.set(settings.get("hotkey", "F6"))
+        with open(SETTINGS_FILE) as f:
+            s = json.load(f)
+            hold_key_var.set(s.get("hold_key",""))
+            mouse_button_var.set(s.get("mouse_button","Left"))
+            speed_var.set(s.get("speed","0.05"))
+            hotkey = s.get("hotkey","F6")
+            hotkey_var.set(hotkey)
+            current_hotkey = hotkey
             setup_hotkey()
 
-def change_hotkey():
-    def set_new_hotkey(e):
-        new_key = e.name
-        hotkey_var.set(new_key.upper())
-        keyboard.unhook_all_hotkeys()
-        setup_hotkey()
-        temp.destroy()
-        
-    temp = tk.Toplevel(root)
-    temp.title("Press a new Hotkey")
-    temp.geometry("300x100")
-    temp.configure(bg="#1e1e1e")
-    tk.Label(temp, text="Press any key...", bg="#1e1e1e", fg="white").pack(expand=True)
-    temp.bind("<KeyPress>", set_new_hotkey)
-
+# ─── Hotkey Binding ────────────────────────────────────────────────────────────
 def setup_hotkey():
     try:
-        keyboard.add_hotkey(hotkey_var.get().lower(), toggle_clicker)
+        keyboard.add_hotkey(current_hotkey.lower(), toggle_clicker)
     except Exception as e:
-        messagebox.showerror("Error", f"Hotkey binding failed: {e}")
+        messagebox.showerror("Hotkey Error", str(e))
 
-# GUI setup
+def on_hotkey_change(e=None):
+    global current_hotkey
+    new = hotkey_var.get()
+    if current_hotkey:
+        try: keyboard.remove_hotkey(current_hotkey.lower())
+        except: pass
+    current_hotkey = new
+    setup_hotkey()
+
+# ─── Hold-Key Capture (in-window) ─────────────────────────────────────────────
+def on_key_press(e):
+    global setting_hold_key
+    if setting_hold_key:
+        hold_key_var.set(e.keysym.upper())
+        setting_hold_key = False
+        root.unbind("<KeyPress>")
+
+def start_set_hold_key():
+    global setting_hold_key
+    setting_hold_key = True
+    root.bind("<KeyPress>", on_key_press)
+
+# ─── GUI ──────────────────────────────────────────────────────────────────────
 root = tk.Tk()
-root.title("Minecraft Auto Clicker Ultimate v3")
-root.geometry("400x500")
-root.configure(bg="#1e1e1e")
-root.minsize(350, 400)
+root.title("OP Auto Clicker 3.1")
+root.geometry("400x480")
+root.minsize(360,440)
+root.configure(bg="#ececec")
 
-# Dark Theme Style
 style = ttk.Style(root)
 style.theme_use("clam")
-style.configure(".", background="#1e1e1e", foreground="#ffffff", fieldbackground="#2d2d2d", font=('Segoe UI', 10))
-style.map("TButton", background=[('active', '#3e3e3e')])
+style.configure(".", background="#ececec", foreground="#000", fieldbackground="#fff")
+style.map("TButton", background=[('active','#ddd')])
 
-# Variables
-hold_key_var = tk.StringVar()
+hold_key_var   = tk.StringVar()
 mouse_button_var = tk.StringVar(value="Left")
-speed_var = tk.StringVar(value="0.05")
-status_var = tk.StringVar(value="Status: Stopped")
-hotkey_var = tk.StringVar(value="F6")
+speed_var      = tk.StringVar(value="0.05")
+status_var     = tk.StringVar(value="Status: Stopped")
+hotkey_var     = tk.StringVar(value="F6")
 
-main_frame = ttk.Frame(root)
-main_frame.pack(expand=True, fill="both", padx=20, pady=20)
+main = ttk.Frame(root)
+main.pack(expand=True, fill="both", padx=15, pady=15)
 
-# Layout
-def add_label_entry(label, var):
-    frame = ttk.Frame(main_frame)
-    frame.pack(fill="x", pady=5)
-    ttk.Label(frame, text=label).pack(side="left")
-    ttk.Entry(frame, textvariable=var).pack(side="right", expand=True, fill="x")
+# — Hold Key —
+hkf = ttk.Frame(main); hkf.pack(fill="x", pady=5)
+ttk.Label(hkf, text="Hold Key:").pack(side="left")
+ttk.Entry(hkf, textvariable=hold_key_var).pack(side="left", expand=True, fill="x", padx=5)
+ttk.Button(hkf, text="Set Key",   command=start_set_hold_key).pack(side="right")
 
-# Hold Key setting
-hold_key_frame = ttk.Frame(main_frame)
-hold_key_frame.pack(fill="x", pady=5)
-ttk.Label(hold_key_frame, text="Hold Key:").pack(side="left")
-hold_key_entry = ttk.Entry(hold_key_frame, textvariable=hold_key_var)
-hold_key_entry.pack(side="left", expand=True, fill="x", padx=5)
+# — Mouse Button —
+mbf = ttk.Frame(main); mbf.pack(fill="x", pady=5)
+ttk.Label(mbf, text="Mouse Button:").pack(side="left")
+ttk.Combobox(
+    mbf,
+    textvariable=mouse_button_var,
+    values=["Left","Right","Middle"],
+    state="readonly"
+).pack(side="right", expand=True, fill="x")
 
-def set_hold_key(event=None):
-    def capture_key(e):
-        key = e.name
-        hold_key_var.set(key.upper())
-        temp.destroy()
-    
-    temp = tk.Toplevel(root)
-    temp.title("Press a Key")
-    temp.geometry("300x100")
-    temp.configure(bg="#1e1e1e")
-    ttk.Label(temp, text="Press a key...", background="#1e1e1e", foreground="white").pack(expand=True)
-    temp.bind("<KeyPress>", capture_key)
+# — Click Speed —
+spf = ttk.Frame(main); spf.pack(fill="x", pady=5)
+ttk.Label(spf, text="Click Speed (s):").pack(side="left")
+ttk.Entry(spf, textvariable=speed_var, width=8).pack(side="right")
 
-ttk.Button(hold_key_frame, text="Set Key", command=set_hold_key).pack(side="right")
+# — Presets —
+prf = ttk.Frame(main); prf.pack(fill="x", pady=10)
+ttk.Label(prf, text="Presets:").grid(row=0,column=0, sticky="w")
+for i,(t,v) in enumerate([("Slow",0.2),("Med",0.1),("Fast",0.05)]):
+    ttk.Button(prf, text=t, command=lambda vv=v: set_speed(vv))\
+        .grid(row=0, column=i+1, padx=5, sticky="ew")
+prf.columnconfigure(1, weight=1); prf.columnconfigure(2, weight=1); prf.columnconfigure(3, weight=1)
 
-add_label_entry("Mouse Button:", mouse_button_var)
-add_label_entry("Click Speed (seconds):", speed_var)
+# — Hotkey Dropdown —
+hkdf = ttk.LabelFrame(main, text="Toggle Hotkey")
+hkdf.pack(fill="x", pady=10)
+options = ["F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
+           "Space","Ctrl","Alt","Shift","Enter","Esc"]
+ttk.Combobox(
+    hkdf,
+    textvariable=hotkey_var,
+    values=options,
+    state="readonly"
+).pack(fill="x", padx=5, pady=5)
+hotkey_var.trace_add("write", lambda *a: on_hotkey_change())
 
-# Presets
-preset_frame = ttk.Frame(main_frame)
-preset_frame.pack(fill="x", pady=10)
-ttk.Label(preset_frame, text="Presets:").pack(anchor="w")
-ttk.Button(preset_frame, text="Slow", command=lambda: set_speed(0.2)).pack(side="left", expand=True, fill="x", padx=2)
-ttk.Button(preset_frame, text="Medium", command=lambda: set_speed(0.1)).pack(side="left", expand=True, fill="x", padx=2)
-ttk.Button(preset_frame, text="Fast", command=lambda: set_speed(0.05)).pack(side="left", expand=True, fill="x", padx=2)
+# — Control Buttons —
+btnf = ttk.Frame(main); btnf.pack(fill="x", pady=10)
+ttk.Button(btnf, text="Start Clicking", command=start_clicking)\
+    .grid(row=0,column=0,sticky="ew", padx=5)
+ttk.Button(btnf, text="Stop Clicking",  command=stop_clicking)\
+    .grid(row=0,column=1,sticky="ew", padx=5)
+btnf.columnconfigure(0,weight=1); btnf.columnconfigure(1,weight=1)
 
-# Buttons
-btn_frame = ttk.Frame(main_frame)
-btn_frame.pack(fill="x", pady=10)
-ttk.Button(btn_frame, text="Start Clicking", command=start_clicking).pack(side="left", expand=True, fill="x", padx=2)
-ttk.Button(btn_frame, text="Stop Clicking", command=stop_clicking).pack(side="left", expand=True, fill="x", padx=2)
+# — AFK Buttons —
+afkf = ttk.Frame(main); afkf.pack(fill="x", pady=5)
+ttk.Button(afkf, text="Start AFK", command=start_afk_mode)\
+    .grid(row=0,column=0,sticky="ew", padx=5)
+ttk.Button(afkf, text="Stop AFK",  command=stop_afk_mode)\
+    .grid(row=0,column=1,sticky="ew", padx=5)
+afkf.columnconfigure(0,weight=1); afkf.columnconfigure(1,weight=1)
 
-afk_frame = ttk.Frame(main_frame)
-afk_frame.pack(fill="x", pady=10)
-ttk.Button(afk_frame, text="Start AFK", command=start_afk_mode).pack(side="left", expand=True, fill="x", padx=2)
-ttk.Button(afk_frame, text="Stop AFK", command=stop_afk_mode).pack(side="left", expand=True, fill="x", padx=2)
+# — Other Actions & Status —
+ttk.Button(main, text="Check for Updates", command=check_for_update).pack(fill="x", pady=5)
+ttk.Button(main, text="Save Settings",      command=save_settings).pack(fill="x", pady=5)
+ttk.Label(main, textvariable=status_var, font=('Segoe UI',10,'bold'))\
+    .pack(pady=10)
 
-# Hotkey and Update
-ttk.Label(main_frame, text="Toggle Hotkey:").pack(pady=(10, 2))
-ttk.Entry(main_frame, textvariable=hotkey_var, state="readonly", justify="center").pack(fill="x")
-ttk.Button(main_frame, text="Change Hotkey", command=change_hotkey).pack(pady=5, fill="x")
-
-ttk.Button(main_frame, text="Check for Updates", command=check_for_update).pack(pady=5, fill="x")
-ttk.Button(main_frame, text="Save Settings", command=save_settings).pack(pady=5, fill="x")
-
-ttk.Label(main_frame, textvariable=status_var, font=('Segoe UI', 10, 'bold')).pack(pady=10)
-
-# Start Tray Icon
+# — Final Setup —
 root.protocol("WM_DELETE_WINDOW", on_close)
-
 tray_icon = create_tray_icon()
-tray_thread = threading.Thread(target=tray_icon.run, daemon=True)
-tray_thread.start()
-
+threading.Thread(target=tray_icon.run, daemon=True).start()
 load_settings()
 root.mainloop()
