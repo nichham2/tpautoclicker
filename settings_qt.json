@@ -1,0 +1,9 @@
+{
+  "hold_key": "None",
+  "mouse_button": "Left",
+  "speed": 0.05,
+  "hotkey": "F6",
+  "minimize_to_tray": false,
+  "notifications": true,
+  "sounds": true
+}
