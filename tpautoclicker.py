@@ -8,10 +8,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
 
-APP_NAME      = "OP Auto Clicker 3.5-Qt"
+APP_NAME      = "TP Auto Clicker"
 VERSION       = "3.5"
 UPDATE_URL    = "https://raw.githubusercontent.com/nichham2/auto-clicker/main/version.txt"
-SETTINGS_FILE = "settings_qt.json"
+SETTINGS_FILE = "settings.json"
 
 class AutoClicker(QMainWindow):
     def __init__(self):
