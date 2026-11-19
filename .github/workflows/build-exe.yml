@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      draft_release:
+        description: "Tag for a draft release, e.g. v4.0.0 (leave empty to just build)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -65,6 +70,21 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          files: |
+            TPAutoClicker-windows.zip
+            release/TPAutoClicker.exe
+
+      # Run the workflow by hand with a tag to get a draft release to review.
+      # Nothing is public and no tag is created until the draft is published.
+      - name: Draft release (manual runs with a tag)
+        if: github.event_name == 'workflow_dispatch' && inputs.draft_release != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.draft_release }}
+          target_commitish: ${{ github.sha }}
+          name: TP Auto Clicker ${{ inputs.draft_release }}
+          body_path: release-notes/${{ inputs.draft_release }}.md
+          draft: true
           files: |
             TPAutoClicker-windows.zip
             release/TPAutoClicker.exe
