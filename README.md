@@ -15,6 +15,10 @@ creates `templates/` and `sequences/` next to itself (with the bundled tower-def
 loop) and saves `settings.json` there too. Windows SmartScreen may warn because the exe
 isn't signed: click *More info → Run anyway*.
 
+To build the exe yourself on Windows: install Python, then double-click `build.bat`
+(or run it from a terminal). It sets up a private environment in `.venv`, runs the
+tests, builds `dist\TPAutoClicker.exe` and self-tests it.
+
 To publish a new release: push a tag like `v4.0.1` and the workflow attaches the exe.
 
 ## Run from source
