@@ -6,7 +6,18 @@ accurate repeated clicks. Automation watches the screen for buttons and popups
 for the **LEVEL CLEARED** popup, click **RETRY**, turn on **2X** speed, click
 **START**, and repeat forever.
 
-## Install
+## Download (Windows)
+
+Grab `TPAutoClicker.exe` from the [Releases page](https://github.com/nichham2/tpautoclicker/releases),
+or from the latest **Build Windows exe** run on the Actions tab (Artifacts section).
+No Python needed: put the exe in its own folder and double-click it. On first run it
+creates `templates/` and `sequences/` next to itself (with the bundled tower-defense
+loop) and saves `settings.json` there too. Windows SmartScreen may warn because the exe
+isn't signed: click *More info → Run anyway*.
+
+To publish a new release: push a tag like `v4.0.1` and the workflow attaches the exe.
+
+## Run from source
 
 1. Python 3.9+ (Windows is the main target; macOS/Linux mostly work).
 2. `pip install -r requirements.txt`

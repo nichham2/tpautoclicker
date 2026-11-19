@@ -23,6 +23,34 @@ SETTINGS_FILE = os.path.join(app_dir(), "settings.json")
 TEMPLATES_DIR = os.path.join(app_dir(), "templates")
 SEQUENCES_DIR = os.path.join(app_dir(), "sequences")
 
+
+def bundled_dir() -> str:
+    """Where read-only bundled files live (inside the exe when frozen)."""
+    return getattr(sys, "_MEIPASS", app_dir())
+
+
+def install_bundled_files() -> None:
+    """In the single-file exe, copy the bundled templates/ and sequences/ next to
+    the exe on first run so they can be edited, and add any new bundled files
+    later versions ship. Files the user already has are never overwritten."""
+    src_root = bundled_dir()
+    if os.path.abspath(src_root) == os.path.abspath(app_dir()):
+        return
+    import shutil
+
+    for sub, dst in (("templates", TEMPLATES_DIR), ("sequences", SEQUENCES_DIR)):
+        src = os.path.join(src_root, sub)
+        if not os.path.isdir(src):
+            continue
+        try:
+            os.makedirs(dst, exist_ok=True)
+            for name in os.listdir(src):
+                target = os.path.join(dst, name)
+                if not os.path.exists(target):
+                    shutil.copy2(os.path.join(src, name), target)
+        except OSError:
+            pass
+
 DEFAULTS: dict[str, Any] = {
     # Clicker
     "mouse_button": "Left",          # Left / Right / Middle
