@@ -111,3 +111,38 @@ def test_minibar_controls_main_window(monkeypatch, tmp_path):
         assert w.scheme.dark == (mode == "Dark")
     w.seq_dirty = False
     w.close()
+
+
+def test_layout_fits_at_narrow_and_wide_sizes(monkeypatch, tmp_path):
+    """Nothing is cut off at the smallest window size, and fields don't stretch
+    across a maximised window."""
+    from PySide6.QtWidgets import QAbstractButton, QAbstractSpinBox, QApplication, QComboBox
+
+    import tpac.app as appmod
+    from tpac.inputs import NullBackend
+
+    monkeypatch.setattr(appmod, "make_backend", lambda: (NullBackend(), None))
+    monkeypatch.setattr(appmod, "SETTINGS_FILE", str(tmp_path / "settings.json"))
+    app = QApplication.instance() or QApplication([])
+    w = appmod.MainWindow()
+    w.minibar.hide()
+    try:
+        for tab in range(w.tabs.count()):
+            w.tabs.setCurrentIndex(tab)
+            w.resize(100, 600)  # clamped to the minimum width
+            w.show()
+            app.processEvents()
+            page = w.tabs.currentWidget()
+            for b in page.findChildren(QAbstractButton):
+                if b.isVisible():
+                    assert b.width() >= b.minimumSizeHint().width(), (tab, b.text(), b.width())
+                    right = b.mapTo(w, b.rect().topRight()).x()
+                    assert right <= w.width(), (tab, b.text(), right, w.width())
+            w.resize(2400, 1000)
+            app.processEvents()
+            for f in page.findChildren(QAbstractSpinBox) + page.findChildren(QComboBox):
+                if f.isVisible() and f is not w.seq_combo:
+                    assert f.width() <= 260, (tab, f.objectName(), f.width())
+    finally:
+        w.seq_dirty = False
+        w.close()
