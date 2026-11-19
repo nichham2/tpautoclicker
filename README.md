@@ -19,7 +19,10 @@ To build the exe yourself on Windows: install Python, then double-click `build.b
 (or run it from a terminal). It sets up a private environment in `.venv`, runs the
 tests, builds `dist\TPAutoClicker.exe` and self-tests it.
 
-To publish a new release: push a tag like `v4.0.1` and the workflow attaches the exe.
+To publish a new release: write its notes in `release-notes/vX.Y.Z.md`, then run the
+**Build Windows exe** workflow by hand (Actions tab → *Run workflow*) with that tag in
+*draft_release*. It builds, tests and attaches the exe to a **draft** release for you to
+review and publish. (Pushing a `vX.Y.Z` tag still publishes straight away.)
 
 ## Run from source
 
