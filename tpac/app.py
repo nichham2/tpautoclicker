@@ -117,7 +117,37 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._automation_tab(), "Automation")
         self.tabs.addTab(self._log_tab(), "Log")
         self.tabs.addTab(self._scroll(self._settings_tab()), "Settings")
-        self.setCentralWidget(self.tabs)
+        self.tabs.tabBar().hide()  # navigation lives in the sidebar instead
+
+        from PySide6.QtWidgets import QFrame
+        side = QFrame()
+        side.setObjectName("sidebar")
+        side.setFixedWidth(170)
+        sv = QVBoxLayout(side)
+        sv.setContentsMargins(12, 16, 0, 16)  # no right margin: the selected item joins the page
+        brand = QLabel(APP_NAME)
+        brand.setObjectName("brand")
+        brand.setWordWrap(True)
+        sv.addWidget(brand)
+        self.nav = QButtonGroup(self)
+        for i in range(self.tabs.count()):
+            b = QPushButton(self.tabs.tabText(i))
+            b.setProperty("nav", True)
+            b.setCheckable(True)
+            b.setChecked(i == 0)
+            self.nav.addButton(b, i)
+            sv.addWidget(b)
+        sv.addStretch()
+        self.nav.idClicked.connect(self.tabs.setCurrentIndex)
+        self.tabs.currentChanged.connect(lambda i: self.nav.button(i).setChecked(True))
+
+        root = QWidget()
+        h = QHBoxLayout(root)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        h.addWidget(side)
+        h.addWidget(self.tabs, 1)
+        self.setCentralWidget(root)
         self.statusBar().showMessage("Ready")
 
     @staticmethod
@@ -445,7 +475,7 @@ class MainWindow(QMainWindow):
         g = QGroupBox("Appearance")
         f = QFormLayout(g)
         self.theme_mode = QComboBox()
-        self.theme_mode.addItems(["System", "Light", "Dark"])
+        self.theme_mode.addItems(["Dashboard", "System", "Light", "Dark"])
         self.theme_mode.setCurrentText(s["theme_mode"])
         self.theme_mode.currentTextChanged.connect(lambda _: self._apply_theme())
         f.addRow("Theme:", self.theme_mode)

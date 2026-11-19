@@ -104,7 +104,7 @@ DEFAULTS: dict[str, Any] = {
     "mouse_corner_failsafe": True,   # slam the mouse into the top-left corner to stop
     "capture_delay_s": 3,
     # Appearance
-    "theme_mode": "System",          # System / Light / Dark
+    "theme_mode": "Dashboard",       # Dashboard / System / Light / Dark
     "accent": "#6750A4",             # Material You seed colour
     "show_minibar": True,            # always-on-top mini controls
     "minibar_x": -1,                 # -1 = default spot (top-right)

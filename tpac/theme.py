@@ -115,6 +115,21 @@ def make_scheme(seed: str, dark: bool) -> Scheme:
     )
 
 
+def dashboard_scheme(seed: str) -> Scheme:
+    """Flat navy dashboard look: fixed slate surfaces, vivid accent, coral/green status."""
+    c = QColor(seed)
+    h, _, s = colorsys.rgb_to_hls(c.redF(), c.greenF(), c.blueF())
+    primary = _tone(h, max(0.55, min(s, 0.8)), 48)  # vivid enough to read on navy
+    return Scheme(
+        True, primary, "#ffffff", _mix("#2a2b3a", primary, 0.35), "#ffffff",
+        "#a3a4bd", "#1e1f2b", "#353648", "#e8e8f2", "#4a3f22", "#f5c44e",
+        "#f0675a", "#ffffff", "#f0675a", "#ffffff",
+        "#1e1f2b", "#191a24", "#16171f", "#2a2b3a", "#313243", "#3a3b4d", "#43445a",
+        "#ffffff", "#8f90a6", "#4a4b60", "#3a3b4d", "#e8e8f2", "#1e1f2b",
+        "#1f4a3c", "#5fd3a5",
+    )
+
+
 def system_is_dark() -> bool:
     try:
         return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
@@ -200,6 +215,16 @@ QPushButton[variant="text"] {{ background: transparent; color: {sc.primary}; pad
 QPushButton[variant="text"]:hover {{ background: {_mix(sc.surface, sc.primary, 0.08)}; }}
 QPushButton#menu {{ padding-right: 34px; }}
 QPushButton::menu-indicator {{ image: url({ic['down']}); subcontrol-position: right center; right: 10px; }}
+
+/* ---- sidebar navigation (replaces the tab bar) ---- */
+QFrame#sidebar {{ background: {sc.primary}; }}
+QLabel#brand {{ color: {sc.on_primary}; font-size: 13pt; font-weight: 700; padding: 6px 8px 14px 8px; }}
+QPushButton[nav="true"] {{
+    background: transparent; color: {_mix(sc.primary, sc.on_primary, 0.72)};
+    border-radius: 12px; padding: 10px 14px; text-align: left; font-weight: 600;
+}}
+QPushButton[nav="true"]:hover {{ background: {_mix(sc.primary, sc.on_primary, 0.12)}; color: {sc.on_primary}; }}
+QPushButton[nav="true"]:checked {{ background: {sc.surface}; color: {sc.on_surface}; }}
 
 /* ---- cards ---- */
 QGroupBox {{
@@ -339,9 +364,11 @@ def palette(sc: Scheme) -> QPalette:
 
 
 def apply(app: QApplication, mode: str = "System", seed: str = SEEDS["Purple"]) -> Scheme:
-    """mode: System / Light / Dark. Returns the scheme that was applied."""
-    dark = system_is_dark() if mode == "System" else mode == "Dark"
-    sc = make_scheme(seed, dark)
+    """mode: Dashboard / System / Light / Dark. Returns the scheme that was applied."""
+    if mode == "Dashboard":
+        sc = dashboard_scheme(seed)
+    else:
+        sc = make_scheme(seed, system_is_dark() if mode == "System" else mode == "Dark")
     app.setStyle("Fusion")
     app.setPalette(palette(sc))
     app.setStyleSheet(stylesheet(sc))

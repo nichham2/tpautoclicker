@@ -105,9 +105,13 @@ def test_minibar_controls_main_window(monkeypatch, tmp_path):
     assert mb.btn_click.text().startswith("▶")
     w.chk_minibar.setChecked(False)
     assert not mb.isVisible() and w.settings["show_minibar"] is False
-    for mode in ("Light", "Dark"):  # theme switches without errors
+    for mode in ("Light", "Dark", "Dashboard"):  # theme switches without errors
         w.theme_mode.setCurrentText(mode)
         app.processEvents()
-        assert w.scheme.dark == (mode == "Dark")
+        assert w.scheme.dark == (mode != "Light")
+    w.nav.button(3).click()         # sidebar drives the pages
+    assert w.tabs.currentIndex() == 3
+    w.tabs.setCurrentIndex(1)
+    assert w.nav.checkedId() == 1
     w.seq_dirty = False
     w.close()
