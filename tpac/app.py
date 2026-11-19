@@ -122,9 +122,9 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QFrame
         side = QFrame()
         side.setObjectName("sidebar")
-        side.setFixedWidth(170)
+        side.setFixedWidth(130)
         sv = QVBoxLayout(side)
-        sv.setContentsMargins(12, 16, 0, 16)  # no right margin: the selected item joins the page
+        sv.setContentsMargins(8, 12, 0, 12)  # no right margin: the selected item joins the page
         brand = QLabel(APP_NAME)
         brand.setObjectName("brand")
         brand.setWordWrap(True)
@@ -170,7 +170,7 @@ class MainWindow(QMainWindow):
 
         top = QHBoxLayout()
         self.btn_click = QPushButton()
-        self.btn_click.setMinimumHeight(48)
+        self.btn_click.setMinimumHeight(32)
         self.btn_click.clicked.connect(self.toggle_clicker)
         top.addWidget(self.btn_click, 3)
         self.lbl_clicks = QLabel("0 clicks")
@@ -375,7 +375,7 @@ class MainWindow(QMainWindow):
 
         row = QHBoxLayout()
         self.btn_seq = QPushButton()
-        self.btn_seq.setMinimumHeight(44)
+        self.btn_seq.setMinimumHeight(30)
         self.btn_seq.clicked.connect(lambda: self.toggle_sequence(0))
         self.btn_seq_from = QPushButton("Start from selected step")
         self.btn_seq_from.clicked.connect(lambda: self.toggle_sequence(max(0, self.table.currentRow())))

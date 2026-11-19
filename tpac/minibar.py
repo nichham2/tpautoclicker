@@ -34,7 +34,7 @@ class MiniBar(QWidget):
         self._drag: QPoint | None = None
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 8, 12, 8)
+        outer.setContentsMargins(8, 5, 8, 5)
         outer.setSpacing(3)
         row = QHBoxLayout()
         row.setSpacing(5)
@@ -194,7 +194,7 @@ class MiniBar(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 20, 20)
+        path.addRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
         p.fillPath(path, self._bg)
         p.setPen(self._border)
         p.drawPath(path)
