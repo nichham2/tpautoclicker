@@ -141,3 +141,6 @@ def test_v4_settings_move_to_dashboard_look(tmp_path):
     assert load_settings(str(p))["accent"] == "#0B57D0"
     p.write_text(json.dumps({"theme_mode": "Light", "accent": "#0B57D0", "design": 2}))
     assert load_settings(str(p))["theme_mode"] == "Light"
+
+    p.write_text(json.dumps({"theme_mode": "Dashboard", "design": 2}))
+    assert load_settings(str(p))["theme_mode"] == "Dark"

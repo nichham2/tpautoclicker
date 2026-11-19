@@ -84,13 +84,12 @@ def _mini(p: QPainter, n: float, color):
 _DRAW = {"clicker": _cursor, "automation": _auto, "log": _log, "settings": _gear, "mini": _mini}
 
 
-def icon(name: str, color: str = "#ffffff", size: int = 24, dim: float = 0.62) -> QIcon:
-    """Icon with a dimmed normal state and a full-colour checked/active state."""
+def icon(name: str, color: str = "#8e8e96", checked_color: str = "#ffffff", size: int = 24) -> QIcon:
+    """Icon in ``color``, switching to ``checked_color`` when its button is checked."""
     ic = QIcon()
-    for state, alpha in ((QIcon.Off, dim), (QIcon.On, 1.0)):
+    for state, col in ((QIcon.Off, color), (QIcon.On, checked_color)):
         pm, p = _canvas(size)
-        c = QColor(color)
-        c.setAlphaF(alpha)
+        c = QColor(col)
         _DRAW[name](p, size, c)
         p.end()
         ic.addPixmap(pm, QIcon.Normal, state)
@@ -99,11 +98,11 @@ def icon(name: str, color: str = "#ffffff", size: int = 24, dim: float = 0.62) -
 
 
 def logo(primary: str, size: int = 40) -> QPixmap:
-    """App mark: a white rounded square with the accent-coloured cursor."""
+    """App mark: an accent-coloured rounded square with a white cursor."""
     pm, p = _canvas(size)
     p.setPen(Qt.NoPen)
-    p.setBrush(QColor("#ffffff"))
-    p.drawRoundedRect(QRectF(0, 0, size, size), size * 0.3, size * 0.3)
-    _cursor(p, size, primary)
+    p.setBrush(QColor(primary))
+    p.drawRoundedRect(QRectF(0, 0, size, size), size * 0.22, size * 0.22)
+    _cursor(p, size, "#ffffff")
     p.end()
     return pm

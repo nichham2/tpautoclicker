@@ -42,11 +42,12 @@ borderless/windowed fullscreen to see the bar.
 
 ## Look
 
-A dark dashboard design: navy panels, rounded cards, big stat numbers and a
-coloured icon sidebar for switching between Clicker, Automation, Log and
-Settings (the button at the bottom of the sidebar shows/hides the mini
-controls). Dark is the default; *Settings → Appearance* also has Light and
-System modes and a choice of accent colours (or pick your own).
+A compact, pro-tool style: charcoal panels with small corners, darker inset
+fields, small type and tight spacing, teal/blue highlights, and an icon tool
+rail on the left for Clicker, Automation, Log and Settings (the button at the
+bottom of the rail shows/hides the mini controls). Dark is the default;
+*Settings → Appearance* also has Light and System modes and a choice of accent
+colours (or pick your own).
 
 ## Clicker page
 

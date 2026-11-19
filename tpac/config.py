@@ -140,6 +140,8 @@ def _migrate(raw: dict[str, Any]) -> dict[str, Any]:
         out["theme_mode"] = "Dark"
         if out.get("accent", "#6750A4").lower() == "#6750a4":
             out["accent"] = "#6C5DD3"
+    if out.get("theme_mode") not in (None, "System", "Light", "Dark"):
+        out["theme_mode"] = "Dark"  # e.g. a theme name from a test build
     return out
 
 
