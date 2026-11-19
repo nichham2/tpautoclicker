@@ -86,7 +86,7 @@ sizes* is on, nearby sizes are tried too.
 
 `sequences/tower_defense_retry_loop.json` (built from a screen recording at 1920×1080):
 
-1. Wait for the **LEVEL CLEARED** popup (no time limit, the level can take as long as it needs)
+1. Wait for the end-of-level popup, whatever its title (LEVEL CLEARED, THE BASE DROWNED, ...), by looking for its **RETRY** button (no time limit)
 2. Click **RETRY** (re-click until the popup goes away)
 3. Wait for the setup screen (the **START (SPACE)** button)
 4. Click **2X** to turn on double speed (skipped if not found; untick this step if your speed setting persists)

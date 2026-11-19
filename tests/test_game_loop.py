@@ -21,10 +21,12 @@ def frame(name):
     return load_image(os.path.join(FIX, name + ".jpg"))
 
 
-FRAMES = {k: frame(k) for k in ("in_game", "popup_level_cleared", "transition", "setup_screen", "start_fading")}
+FRAMES = {k: frame(k) for k in ("in_game", "popup_level_cleared", "popup_base_drowned", "transition",
+                                 "setup_screen", "start_fading")}
 
 # Button boxes measured from the recording (x0, y0, x1, y1)
 RETRY = (683, 708, 958, 764)
+RETRY_DROWNED = (688, 694, 948, 742)  # the failure popup sits a little higher
 DOUBLE = (1855, 120, 1910, 165)
 START = (1640, 1005, 1910, 1075)
 
@@ -36,7 +38,9 @@ def inside(box, x, y):
 class FakeGame:
     """Minimal state machine of the game shown in the video."""
 
-    def __init__(self, play_frames=3):
+    def __init__(self, play_frames=3, outcomes=("popup_level_cleared",)):
+        self.outcomes = list(outcomes)
+        self.popup = self.outcomes[0]
         self.state = "playing"
         self.ticks = 0
         self.play_frames = play_frames
@@ -56,13 +60,14 @@ class FakeGame:
         self.ticks += 1
         if self.state == "playing" and self.ticks >= self.play_frames:
             self.state, self.ticks = "popup", 0
+            self.popup = self.outcomes[self.levels_started % len(self.outcomes)]
         elif self.state == "transition" and self.ticks >= 2:
             self.state, self.ticks = "setup", 0
         elif self.state == "starting" and self.ticks >= 1:
             self.state, self.ticks = "playing", 0
         return {
             "playing": FRAMES["in_game"],
-            "popup": FRAMES["popup_level_cleared"],
+            "popup": FRAMES[self.popup],
             "transition": FRAMES["transition"],
             "setup": FRAMES["setup_screen"],
             "starting": FRAMES["start_fading"],
@@ -78,13 +83,16 @@ class FakeGame:
     def click(self, button="left", clicks=1, hold_s=0.0, gap_s=0.03):
         x, y = self.pos
         self.events.append(("click", self.state, x, y))
-        if self.state == "popup" and inside(RETRY, x, y):
+        if self.state == "popup" and inside(self.retry_box(), x, y):
             self.state, self.ticks = "transition", 0
         elif self.state == "setup" and inside(DOUBLE, x, y):
             self.speed_on = True
         elif self.state == "setup" and inside(START, x, y):
             self.state, self.ticks = "starting", 0
             self.levels_started += 1
+
+    def retry_box(self):
+        return RETRY_DROWNED if self.popup == "popup_base_drowned" else RETRY
 
     def tap(self, key, hold_s=0.03):
         self.events.append(("tap", self.state, key))
@@ -134,7 +142,7 @@ def test_retry_loop_runs_three_levels():
     for ev in game.events:
         if ev[0] == "click":
             _, state, x, y = ev
-            assert (state == "popup" and inside(RETRY, x, y)) or (
+            assert (state == "popup" and (inside(RETRY, x, y) or inside(RETRY_DROWNED, x, y))) or (
                 state == "setup" and (inside(DOUBLE, x, y) or inside(START, x, y))
             ), ev
 
@@ -171,3 +179,16 @@ def test_start_from_setup_screen():
     runner.start(seq, start_at=2)
     runner.join(timeout=60)
     assert game.levels_started == 1
+
+
+def test_loop_handles_win_and_loss_popups():
+    """The end popup's title changes (LEVEL CLEARED, THE BASE DROWNED, ...);
+    the loop keys off the RETRY button so every outcome is handled."""
+    game = FakeGame(outcomes=("popup_level_cleared", "popup_base_drowned"))
+    logs = []
+    runner, seq = make_runner(game, logs)
+    seq.repeat = 4
+    runner.start(seq)
+    runner.join(timeout=60)
+    assert runner.loops_done == 4, "\n".join(logs)
+    assert game.levels_started == 4

@@ -24,8 +24,8 @@ def m():
 
 @pytest.mark.parametrize("tpl,present,absent", [
     ("level_cleared.png", ["popup_level_cleared"], ["in_game", "setup_screen", "transition"]),
-    ("retry.png", ["popup_level_cleared"], ["in_game", "setup_screen", "transition"]),
-    ("skill_tree.png", ["popup_level_cleared"], ["in_game", "setup_screen"]),
+    ("retry.png", ["popup_level_cleared", "popup_base_drowned"], ["in_game", "setup_screen", "transition"]),
+    ("skill_tree.png", ["popup_level_cleared", "popup_base_drowned"], ["in_game", "setup_screen"]),
     ("start.png", ["setup_screen"], ["in_game", "popup_level_cleared", "transition"]),
 ])
 def test_templates_detect_only_their_screen(m, tpl, present, absent):
