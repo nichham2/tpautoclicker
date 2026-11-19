@@ -244,7 +244,8 @@ class MainWindow(QMainWindow):
             b.setProperty("variant", "small")
             b.setToolTip(f"{ms} ms")
             b.clicked.connect(lambda _=False, m=ms: self.interval.setValue(m))
-            row.addWidget(self._sized(b, 64))
+            b.setMinimumWidth(64)
+            row.addWidget(b)
         row.addStretch()
         f.addRow("Presets:", row)
 
