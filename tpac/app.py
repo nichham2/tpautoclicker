@@ -73,7 +73,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} {VERSION}")
         self.setWindowIcon(_icon())
-        self.setMinimumHeight(480)
+        self.setMinimumHeight(400)
 
         self.settings = load_settings()
         self.backend, backend_err = make_backend()
@@ -114,16 +114,105 @@ class MainWindow(QMainWindow):
         QApplication.instance().aboutToQuit.connect(self._on_quit)
 
     # ==================================================================== UI
+    PAGES = [("clicker", "Clicker"), ("automation", "Automation"), ("log", "Log"), ("settings", "Settings")]
+
     def _build_ui(self):
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._scroll(self._clicker_tab()), "Clicker")
-        self.tabs.addTab(self._automation_tab(), "Automation")
-        self.tabs.addTab(self._log_tab(), "Log")
-        self.tabs.addTab(self._scroll(self._settings_tab()), "Settings")
-        self.setCentralWidget(self.tabs)
+        builders = [lambda: self._scroll(self._titled(self._clicker_tab(), "Clicker")),
+                    lambda: self._titled(self._automation_tab(), "Automation"),
+                    lambda: self._titled(self._log_tab(), "Log"),
+                    lambda: self._scroll(self._titled(self._settings_tab(), "Settings"))]
+        for (_key, name), build in zip(self.PAGES, builders):
+            self.tabs.addTab(build(), name)
+        self.tabs.tabBar().hide()  # the sidebar replaces the tab bar
+
+        central = QWidget()
+        h = QHBoxLayout(central)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        h.addWidget(self._sidebar())
+        right = QVBoxLayout()
+        right.setContentsMargins(0, 0, 0, 0)
+        right.setSpacing(0)
+        right.addWidget(self.tabs, 1)
+        from PySide6.QtWidgets import QStatusBar
+        self._status = QStatusBar()
+        self._status.setSizeGripEnabled(False)
+        right.addWidget(self._status)
+        h.addLayout(right, 1)
+        self.setCentralWidget(central)
+        self.tabs.currentChanged.connect(self._sync_nav)
+        self._sync_nav(0)
         self.statusBar().showMessage("Ready")
 
-    PAGE_MAX_WIDTH = 820
+    def statusBar(self):
+        """The status line sits under the pages, so the sidebar runs full height."""
+        return self._status
+
+    def _sidebar(self):
+        from PySide6.QtWidgets import QButtonGroup, QFrame, QToolButton
+        from PySide6.QtCore import QSize
+        bar = QFrame()
+        bar.setObjectName("sidebar")
+        bar.setFixedWidth(52)
+        v = QVBoxLayout(bar)
+        v.setContentsMargins(9, 10, 9, 10)
+        v.setSpacing(6)
+        self.logo = QLabel()
+        self.logo.setObjectName("logo")
+        self.logo.setAlignment(Qt.AlignCenter)
+        v.addWidget(self.logo, 0, Qt.AlignHCenter)
+        v.addSpacing(12)
+        self.nav_group = QButtonGroup(bar)
+        self.nav_group.setExclusive(True)
+        self.nav_buttons = []
+        for i, (key, name) in enumerate(self.PAGES):
+            b = QToolButton()
+            b.setObjectName("nav")
+            b.setCheckable(True)
+            b.setToolTip(name)
+            b.setIconSize(QSize(18, 18))
+            b.setProperty("icon_key", key)
+            b.clicked.connect(lambda _=False, idx=i: self.tabs.setCurrentIndex(idx))
+            self.nav_group.addButton(b, i)
+            self.nav_buttons.append(b)
+            v.addWidget(b, 0, Qt.AlignHCenter)
+        v.addStretch()
+        self.nav_mini = QToolButton()
+        self.nav_mini.setObjectName("nav")
+        self.nav_mini.setCheckable(True)
+        self.nav_mini.setToolTip("Mini controls on top of other windows")
+        self.nav_mini.setIconSize(QSize(18, 18))
+        self.nav_mini.setProperty("icon_key", "mini")
+        self.nav_mini.setChecked(self.settings["show_minibar"])
+        self.nav_mini.toggled.connect(lambda on: self.chk_minibar.setChecked(on))
+        v.addWidget(self.nav_mini, 0, Qt.AlignHCenter)
+        self._paint_sidebar_icons()
+        return bar
+
+    def _paint_sidebar_icons(self):
+        if not hasattr(self, "nav_buttons"):
+            return
+        from . import icons
+        for b in self.nav_buttons + [self.nav_mini]:
+            b.setIcon(icons.icon(b.property("icon_key"), self.scheme.on_surface_variant, "#ffffff"))
+        self.logo.setPixmap(icons.logo(self.scheme.primary, 28))
+
+    def _sync_nav(self, idx):
+        if 0 <= idx < len(self.nav_buttons):
+            self.nav_buttons[idx].setChecked(True)
+
+    @staticmethod
+    def _titled(widget, title):
+        """Big page heading, like the design's 'Dashboard' title."""
+        lbl = QLabel(title)
+        lbl.setProperty("role", "title")
+        widget.layout().insertWidget(0, lbl)
+        widget.layout().setContentsMargins(14, 10, 14, 8)
+        widget.layout().setSpacing(6)
+        return widget
+
+    PAGE_MAX_WIDTH = 700
 
     @classmethod
     def _scroll(cls, widget):
@@ -162,7 +251,7 @@ class MainWindow(QMainWindow):
                 page.setMaximumWidth(max(self.PAGE_MAX_WIDTH, page.minimumSizeHint().width()))
                 area.setMinimumWidth(area.widget().minimumSizeHint().width()
                                      + area.verticalScrollBar().sizeHint().width())
-        self.setMinimumWidth(max(560, self.minimumSizeHint().width()))
+        self.setMinimumWidth(max(440, self.minimumSizeHint().width()))
 
     def showEvent(self, ev):
         super().showEvent(ev)
@@ -174,7 +263,8 @@ class MainWindow(QMainWindow):
         f = QFormLayout(group)
         f.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         f.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        f.setHorizontalSpacing(16)
+        f.setHorizontalSpacing(12)
+        f.setVerticalSpacing(5)
         return f
 
     @staticmethod
@@ -194,7 +284,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _row():
         row = QHBoxLayout()
-        row.setSpacing(8)
+        row.setSpacing(6)
         return row
 
     @classmethod
@@ -216,16 +306,17 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(w)
 
         top = QHBoxLayout()
-        self.btn_click = QPushButton()
-        self.btn_click.setMinimumHeight(48)
-        self.btn_click.clicked.connect(self.toggle_clicker)
-        top.addWidget(self.btn_click, 3)
-        self.lbl_clicks = QLabel("0 clicks")
-        self.lbl_clicks.setProperty("role", "big")
-        self.lbl_clicks.setAlignment(Qt.AlignCenter)
-        self.lbl_clicks.setMinimumWidth(120)
-        top.addWidget(self.lbl_clicks, 1)
+        top.setSpacing(8)
+        card, self.lbl_clicks, self.lbl_stat_cps = self._stat_card("Clicks this run", "0")
+        top.addWidget(card, 1)
+        card, self.lbl_stat_status, self.lbl_stat_hint = self._stat_card("Status", "Idle")
+        top.addWidget(card, 1)
         v.addLayout(top)
+        v.addSpacing(2)
+        self.btn_click = QPushButton()
+        self.btn_click.setMinimumHeight(32)
+        self.btn_click.clicked.connect(self.toggle_clicker)
+        v.addWidget(self.btn_click)
 
         forms = []
         g = QGroupBox("Click")
@@ -238,8 +329,8 @@ class MainWindow(QMainWindow):
         self.click_type.addItems(["Single", "Double"])
         self.click_type.setCurrentText(s["click_type"])
         row = self._row()
-        row.addWidget(self._sized(self.mb, 140))
-        row.addWidget(self._sized(self.click_type, 140))
+        row.addWidget(self._sized(self.mb, 112))
+        row.addWidget(self._sized(self.click_type, 112))
         row.addStretch()
         f.addRow("Button:", row)
 
@@ -250,8 +341,8 @@ class MainWindow(QMainWindow):
         self.interval.setValue(s["interval_ms"])
         self.lbl_cps = QLabel()
         self.interval.valueChanged.connect(self._update_cps)
-        row.addWidget(self._sized(self.interval, 140))
-        self.lbl_cps.setMinimumWidth(110)
+        row.addWidget(self._sized(self.interval, 112))
+        self.lbl_cps.setMinimumWidth(90)
         row.addWidget(self.lbl_cps)
         row.addStretch()
         f.addRow("Interval:", row)
@@ -261,7 +352,7 @@ class MainWindow(QMainWindow):
             b.setProperty("variant", "small")
             b.setToolTip(f"{ms} ms")
             b.clicked.connect(lambda _=False, m=ms: self.interval.setValue(m))
-            b.setMinimumWidth(64)
+            b.setMinimumWidth(48)
             row.addWidget(b)
         row.addStretch()
         f.addRow("Presets:", row)
@@ -272,7 +363,7 @@ class MainWindow(QMainWindow):
         self.jitter.setValue(s["jitter_pct"])
         self.jitter.setToolTip("Randomise each interval by up to this much so clicks look less robotic")
         row = self._row()
-        row.addWidget(self._sized(self.jitter, 140))
+        row.addWidget(self._sized(self.jitter, 112))
         row.addStretch()
         f.addRow("Random variation:", row)
         v.addWidget(g)
@@ -294,16 +385,16 @@ class MainWindow(QMainWindow):
         btn_pick.clicked.connect(self._pick_fixed)
         row = self._row()
         row.addWidget(self.loc_cursor)
-        row.addSpacing(16)
+        row.addSpacing(10)
         row.addWidget(self.loc_fixed)
         row.addStretch()
         f.addRow("Click at:", row)
         row = self._row()
         row.addWidget(QLabel("x"))
-        row.addWidget(self._sized(self.fx, 100))
+        row.addWidget(self._sized(self.fx, 80))
         row.addSpacing(10)
         row.addWidget(QLabel("y"))
-        row.addWidget(self._sized(self.fy, 100))
+        row.addWidget(self._sized(self.fy, 80))
         row.addSpacing(10)
         row.addWidget(btn_pick)
         row.addStretch()
@@ -330,9 +421,9 @@ class MainWindow(QMainWindow):
         self.stop_secs.setSpecialValueText("never")
         self.stop_secs.setSuffix(" s")
         self.stop_secs.setValue(s["stop_after_seconds"])
-        row.addWidget(self._sized(self.stop_clicks, 140))
+        row.addWidget(self._sized(self.stop_clicks, 112))
         row.addWidget(QLabel("or"))
-        row.addWidget(self._sized(self.stop_secs, 140))
+        row.addWidget(self._sized(self.stop_secs, 112))
         row.addStretch()
         f.addRow("Stop after:", row)
 
@@ -343,7 +434,7 @@ class MainWindow(QMainWindow):
         self.hold_key.setToolTip("A key held down for as long as the clicker runs (e.g. Shift)")
         b = QPushButton("Set…")
         b.clicked.connect(self._set_hold_key)
-        row.addWidget(self._sized(self.hold_key, 140))
+        row.addWidget(self._sized(self.hold_key, 112))
         row.addWidget(b)
         row.addStretch()
         f.addRow("Hold key:", row)
@@ -353,7 +444,7 @@ class MainWindow(QMainWindow):
         self.start_delay.setSuffix(" s")
         self.start_delay.setValue(s["start_delay_s"])
         row = self._row()
-        row.addWidget(self._sized(self.start_delay, 140))
+        row.addWidget(self._sized(self.start_delay, 112))
         row.addStretch()
         f.addRow("Start delay:", row)
         v.addWidget(g)
@@ -368,7 +459,7 @@ class MainWindow(QMainWindow):
         self.afk_interval.setPrefix("every ")
         self.afk_interval.setValue(s["afk_interval_s"])
         h.addWidget(self.btn_afk)
-        h.addWidget(self._sized(self.afk_interval, 140))
+        h.addWidget(self._sized(self.afk_interval, 112))
         h.addStretch()
         v.addWidget(g)
         v.addStretch()
@@ -378,9 +469,31 @@ class MainWindow(QMainWindow):
         self._set_clicker_ui(False)
         return w
 
+    @staticmethod
+    def _stat_card(caption, value):
+        """Dashboard-style card: small caption, big number, coloured detail line."""
+        from PySide6.QtWidgets import QFrame
+        card = QFrame()
+        card.setObjectName("stat")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(12, 6, 12, 6)
+        v.setSpacing(2)
+        cap = QLabel(caption)
+        cap.setProperty("role", "statlabel")
+        big = QLabel(value)
+        big.setProperty("role", "stat")
+        sub = QLabel("")
+        sub.setProperty("role", "good")
+        v.addWidget(cap)
+        v.addWidget(big)
+        v.addWidget(sub)
+        return card, big, sub
+
     def _update_cps(self):
         ms = self.interval.value()
         self.lbl_cps.setText(f"≈ {1000.0 / ms:.1f} clicks/s")
+        if hasattr(self, "lbl_stat_cps"):
+            self.lbl_stat_cps.setText(f"+{1000.0 / ms:.1f} per second")
 
     # ------------------------------------------------------------- automation
     def _automation_tab(self):
@@ -389,7 +502,7 @@ class MainWindow(QMainWindow):
 
         row = self._row()
         self.seq_combo = QComboBox()
-        self.seq_combo.setMinimumWidth(220)
+        self.seq_combo.setMinimumWidth(180)
         self.seq_combo.activated.connect(self._on_seq_combo)
         row.addWidget(QLabel("Sequence:"))
         row.addWidget(self.seq_combo, 1)
@@ -412,7 +525,7 @@ class MainWindow(QMainWindow):
         row.addWidget(QLabel("Name:"))
         row.addWidget(self.seq_name, 1)
         row.addWidget(QLabel("Repeat:"))
-        row.addWidget(self._sized(self.seq_repeat, 150))
+        row.addWidget(self._sized(self.seq_repeat, 120))
         v.addLayout(row)
 
         self.seq_notes = QLabel()
@@ -460,7 +573,7 @@ class MainWindow(QMainWindow):
 
         row = self._row()
         self.btn_seq = QPushButton()
-        self.btn_seq.setMinimumHeight(44)
+        self.btn_seq.setMinimumHeight(32)
         self.btn_seq.clicked.connect(lambda: self.toggle_sequence(0))
         self.btn_seq_from = QPushButton("Start from selected step")
         self.btn_seq_from.clicked.connect(lambda: self.toggle_sequence(max(0, self.table.currentRow())))
@@ -505,7 +618,7 @@ class MainWindow(QMainWindow):
                 self._refresh_button_texts()
         b.clicked.connect(set_)
         row = self._row()
-        row.addWidget(self._sized(edit, 140))
+        row.addWidget(self._sized(edit, 112))
         row.addWidget(b)
         row.addStretch()
         return row, edit
@@ -534,19 +647,19 @@ class MainWindow(QMainWindow):
         self.monitor.setRange(1, 16)
         self.monitor.setValue(s["monitor"])
         self.monitor.setToolTip("Which monitor the game is on (1 = main monitor)")
-        f.addRow("Game monitor:", self._left(self._sized(self.monitor, 160)))
+        f.addRow("Game monitor:", self._left(self._sized(self.monitor, 124)))
         self.scan = QDoubleSpinBox()
         self.scan.setRange(0.05, 10)
         self.scan.setSingleStep(0.1)
         self.scan.setSuffix(" s")
         self.scan.setValue(s["scan_interval_s"])
-        f.addRow("Check screen every:", self._left(self._sized(self.scan, 160)))
+        f.addRow("Check screen every:", self._left(self._sized(self.scan, 124)))
         self.threshold = QDoubleSpinBox()
         self.threshold.setRange(0.3, 0.99)
         self.threshold.setSingleStep(0.05)
         self.threshold.setValue(s["match_threshold"])
         self.threshold.setToolTip("How closely the screen must match a captured image. Lower = looser.")
-        f.addRow("Match confidence:", self._left(self._sized(self.threshold, 160)))
+        f.addRow("Match confidence:", self._left(self._sized(self.threshold, 124)))
         self.multi_scale = QCheckBox("Also look for images at other sizes")
         self.multi_scale.setChecked(s["multi_scale"])
         self.multi_scale.setToolTip("Helps when the game runs at a different resolution from the one the images were captured at")
@@ -559,7 +672,7 @@ class MainWindow(QMainWindow):
         self.capture_delay.setSuffix(" s")
         self.capture_delay.setValue(s["capture_delay_s"])
         self.capture_delay.setToolTip("Time to switch to the game before a screenshot is taken")
-        f.addRow("Capture delay:", self._left(self._sized(self.capture_delay, 160)))
+        f.addRow("Capture delay:", self._left(self._sized(self.capture_delay, 124)))
         v.addWidget(g)
 
         g = QGroupBox("Appearance")
@@ -569,14 +682,14 @@ class MainWindow(QMainWindow):
         self.theme_mode.addItems(["System", "Light", "Dark"])
         self.theme_mode.setCurrentText(s["theme_mode"])
         self.theme_mode.currentTextChanged.connect(lambda _: self._apply_theme())
-        f.addRow("Theme:", self._left(self._sized(self.theme_mode, 160)))
+        f.addRow("Theme:", self._left(self._sized(self.theme_mode, 124)))
         self.accent = QComboBox()
         for name, hexc in theme.SEEDS.items():
             self.accent.addItem(self._swatch(hexc), name, hexc)
         self.accent.addItem("Custom…", "custom")
         self._select_accent(s["accent"])
         self.accent.activated.connect(self._on_accent)
-        f.addRow("Accent colour:", self._left(self._sized(self.accent, 160)))
+        f.addRow("Accent colour:", self._left(self._sized(self.accent, 124)))
         self.chk_minibar = QCheckBox("Show mini controls on top of other windows")
         self.chk_minibar.setChecked(s["show_minibar"])
         self.chk_minibar.toggled.connect(self._set_minibar_visible)
@@ -611,9 +724,10 @@ class MainWindow(QMainWindow):
 
     def _apply_theme(self):
         mode = self.theme_mode.currentText() if hasattr(self, "theme_mode") else self.settings["theme_mode"]
-        seed = self.settings.get("accent") or theme.SEEDS["Purple"]
+        seed = self.settings.get("accent") or theme.SEEDS["Violet"]
         self.scheme = theme.apply(QApplication.instance(), mode, seed)
         self.minibar.apply_scheme(self.scheme)
+        self._paint_sidebar_icons()
         if hasattr(self, "btn_seq"):
             self._refresh_button_texts()
 
@@ -677,6 +791,8 @@ class MainWindow(QMainWindow):
             self.minibar.hide()
         if hasattr(self, "act_minibar"):
             self.act_minibar.setChecked(on)
+        if hasattr(self, "nav_mini") and self.nav_mini.isChecked() != on:
+            self.nav_mini.setChecked(on)
 
     def _create_tray(self):
         self.tray = QSystemTrayIcon(_icon(), self)
@@ -713,7 +829,7 @@ class MainWindow(QMainWindow):
         b.hotkey.connect(self._on_hotkey)
 
     def _on_click_count(self, n):
-        self.lbl_clicks.setText(f"{n:,} clicks")
+        self.lbl_clicks.setText(f"{n:,}")
         self.minibar.set_click_count(n)
 
     def log(self, msg: str):
@@ -800,6 +916,8 @@ class MainWindow(QMainWindow):
 
     def _set_clicker_ui(self, running):
         hk = self.settings.get("hotkey", "")
+        self.lbl_stat_status.setText("Clicking" if running else "Idle")
+        self.lbl_stat_hint.setText(f"press {hk.upper()} to {'stop' if running else 'start'}" if hk else "")
         self.btn_click.setText(("■ Stop clicking" if running else "▶ Start clicking") + (f"   [{hk.upper()}]" if hk else ""))
         self._set_variant(self.btn_click, "running" if running else "filled")
         self.minibar.set_clicker_running(running)

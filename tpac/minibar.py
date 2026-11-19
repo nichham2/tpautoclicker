@@ -85,7 +85,7 @@ class MiniBar(QWidget):
     def apply_scheme(self, sc) -> None:
         from .theme import minibar_stylesheet
         self.setStyleSheet(minibar_stylesheet(sc))
-        self._bg = QColor(sc.surface_container_high)
+        self._bg = QColor(sc.surface_container_low)
         self._bg.setAlpha(245)
         self._border = QColor(sc.outline_variant)
         for b in (self.btn_click, self.btn_seq):

@@ -158,3 +158,32 @@ def test_layout_fits_at_narrow_and_wide_sizes(monkeypatch, tmp_path, font_scale)
     finally:
         w.seq_dirty = False
         w.close()
+
+
+def test_sidebar_switches_pages_and_mini_controls(monkeypatch, tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    import tpac.app as appmod
+    from tpac.inputs import NullBackend
+
+    monkeypatch.setattr(appmod, "make_backend", lambda: (NullBackend(), None))
+    monkeypatch.setattr(appmod, "SETTINGS_FILE", str(tmp_path / "settings.json"))
+    QApplication.instance() or QApplication([])
+    w = appmod.MainWindow()
+    try:
+        assert not w.tabs.tabBar().isVisible()
+        for i, b in enumerate(w.nav_buttons):
+            b.click()
+            assert w.tabs.currentIndex() == i and b.isChecked()
+        w.tabs.setCurrentIndex(0)
+        assert w.nav_buttons[0].isChecked()
+        w.nav_mini.setChecked(False)
+        assert not w.chk_minibar.isChecked() and not w.settings["show_minibar"]
+        w.chk_minibar.setChecked(True)
+        assert w.nav_mini.isChecked()
+        w.statusBar().showMessage("hello")
+        assert w.statusBar().currentMessage() == "hello"
+    finally:
+        w.seq_dirty = False
+        w.minibar.hide()
+        w.close()

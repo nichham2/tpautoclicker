@@ -104,8 +104,9 @@ DEFAULTS: dict[str, Any] = {
     "mouse_corner_failsafe": True,   # slam the mouse into the top-left corner to stop
     "capture_delay_s": 3,
     # Appearance
-    "theme_mode": "System",          # System / Light / Dark
-    "accent": "#6750A4",             # Material You seed colour
+    "theme_mode": "Dark",            # System / Light / Dark
+    "accent": "#6C5DD3",             # accent (sidebar, main buttons)
+    "design": 2,                     # bumped when the default look changes
     "show_minibar": True,            # always-on-top mini controls
     "minibar_x": -1,                 # -1 = default spot (top-right)
     "minibar_y": -1,
@@ -132,6 +133,15 @@ def _migrate(raw: dict[str, Any]) -> dict[str, Any]:
         out.pop(old, None)
     if out.get("hold_key") in ("None", None):
         out["hold_key"] = ""
+    if out.get("design", 1) < 2:
+        # v4.0 saved the Material You defaults; move to the dashboard look,
+        # but keep an accent the user picked themselves.
+        out["design"] = 2
+        out["theme_mode"] = "Dark"
+        if out.get("accent", "#6750A4").lower() == "#6750a4":
+            out["accent"] = "#6C5DD3"
+    if out.get("theme_mode") not in (None, "System", "Light", "Dark"):
+        out["theme_mode"] = "Dark"  # e.g. a theme name from a test build
     return out
 
 
