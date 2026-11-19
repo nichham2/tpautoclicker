@@ -18,7 +18,10 @@ from PySide6.QtWidgets import (
 
 from . import APP_NAME, REPO_NAME, REPO_OWNER, VERSION
 from .clicker import AfkEngine, ClickConfig, ClickEngine
-from .config import DEFAULTS, SEQUENCES_DIR, SETTINGS_FILE, TEMPLATES_DIR, app_dir, load_settings, save_settings
+from .config import (
+    DEFAULTS, SEQUENCES_DIR, SETTINGS_FILE, TEMPLATES_DIR, app_dir, bundled_dir,
+    install_bundled_files, load_settings, save_settings,
+)
 from .editor import CaptureHelper, KeyCaptureDialog, StepDialog
 from .inputs import enable_dpi_awareness, make_backend
 from .sequence import STEP_TYPES, Sequence, SequenceRunner, default_step, describe_step
@@ -43,7 +46,7 @@ class Bridge(QObject):
 
 
 def _icon() -> QIcon:
-    path = os.path.join(app_dir(), "icon.ico")
+    path = os.path.join(bundled_dir(), "icon.ico")
     if os.path.exists(path):
         return QIcon(path)
     pix = QPixmap(64, 64)
@@ -989,6 +992,7 @@ class MainWindow(QMainWindow):
 
 def main():
     enable_dpi_awareness()
+    install_bundled_files()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setQuitOnLastWindowClosed(False)

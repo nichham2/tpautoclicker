@@ -84,3 +84,21 @@ def test_corrupt_settings_fall_back_to_defaults(tmp_path):
     p = tmp_path / "settings.json"
     p.write_text("{not json")
     assert load_settings(str(p)) == DEFAULTS
+
+
+def test_install_bundled_files_copies_without_overwriting(tmp_path, monkeypatch):
+    import tpac.config as cfg
+    bundle = tmp_path / "bundle"
+    (bundle / "templates").mkdir(parents=True)
+    (bundle / "templates" / "a.png").write_bytes(b"new")
+    (bundle / "templates" / "b.png").write_bytes(b"new")
+    app = tmp_path / "app"
+    (app / "templates").mkdir(parents=True)
+    (app / "templates" / "a.png").write_bytes(b"mine")
+    monkeypatch.setattr(cfg.sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setattr(cfg, "app_dir", lambda: str(app))
+    monkeypatch.setattr(cfg, "TEMPLATES_DIR", str(app / "templates"))
+    monkeypatch.setattr(cfg, "SEQUENCES_DIR", str(app / "sequences"))
+    cfg.install_bundled_files()
+    assert (app / "templates" / "a.png").read_bytes() == b"mine"
+    assert (app / "templates" / "b.png").read_bytes() == b"new"
