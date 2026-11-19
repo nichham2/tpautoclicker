@@ -1,80 +1,100 @@
 # TP Auto Clicker
 
-TP Auto Clicker is a customizable auto-clicking application designed for tasks requiring repetitive mouse clicks, such as in games like Minecraft or other applications. It features a user-friendly interface, system tray integration, and configurable settings for click speed, mouse buttons, hotkeys, and AFK (Away From Keyboard) mode.
+An auto clicker plus a screen-watching automation engine. The clicker does fast,
+accurate repeated clicks. Automation watches the screen for buttons and popups
+(by image matching) and clicks through a sequence for you, for example: wait
+for the **LEVEL CLEARED** popup, click **RETRY**, turn on **2X** speed, click
+**START**, and repeat forever.
 
-## Features
+## Install
 
-- **Auto Clicking**: Start/stop clicking with customizable mouse buttons (Left, Right, Middle) and click speeds (0.01s to 5s).
-- **Hold Key**: Optionally set a key to hold during clicking.
-- **Toggle Hotkey**: Assign a hotkey (default: F6) to toggle clicking on/off.
-- **AFK Mode**: Simulates small random mouse movements to prevent idle detection.
-- **System Tray**: Minimize to tray with notifications and quick access menu.
-- **Settings Persistence**: Save and load settings in a `settings.json` file.
-- **Customizable UI**: Light/dark theme support based on system settings.
-- **Sound Feedback**: Optional beeps for start/stop actions.
-- **Update Checker**: Check for new versions via GitHub.
+1. Python 3.9+ (Windows is the main target; macOS/Linux mostly work).
+2. `pip install -r requirements.txt`
+3. `python tpautoclicker.py`
 
-## Installation
+> On Linux the `keyboard` package needs root. On Windows, run the app as
+> administrator if a game ignores the clicks (games running as admin only accept
+> input from admin programs).
 
-1. Ensure you have Python 3.8+ installed.
-2. Install required dependencies:
-   ```
-   pip install PySide6 keyboard mouse requests
-   ```
-3. Download or clone the source code from this repository.
-4. Run the application:
-   ```
-   python auto_clicker.py
-   ```
+## Clicker tab
 
-## Usage
+- **Start/stop** with the button or the hotkey (default **F6**). Stopping is instant.
+- **Interval** in milliseconds with presets, live clicks-per-second readout.
+- **Random variation** (0-50%) so clicks aren't perfectly regular.
+- **Single or double** clicks, **left/right/middle** button.
+- **Click where the cursor is**, or at a **fixed spot** (use *Pick…* to choose it on screen).
+- **Stop after** N clicks and/or N seconds.
+- **Hold key** while clicking (released when you stop), and a **start delay**.
+- **Anti-AFK**: nudges the mouse a few pixels every N seconds and puts it back.
 
-1. **Launch the Application**: Run the script to open the TP Auto Clicker window.
-2. **Controls Tab**:
-   - Click **Start Clicking** to begin auto-clicking.
-   - Click **Stop Clicking** to stop.
-   - Use **Start AFK** to enable random mouse movements for AFK mode.
-   - Stop AFK mode with **Stop AFK**.
-3. **Settings Tab**:
-   - **Hold Key**: Click "Set Hold Key" and press a key to set (e.g., Ctrl, Shift, or any letter).
-   - **Mouse Button**: Select Left, Right, or Middle from the dropdown.
-   - **Click Speed**: Adjust using the spin box, +/- buttons, or presets (Slow: 0.2s, Med: 0.1s, Fast: 0.05s).
-   - **Toggle Hotkey**: Click "Set Hotkey" and press a key combination (e.g., F6 or Ctrl+Alt+A).
-   - **Features**: Enable/disable tray minimization, notifications, and sounds.
-   - **Actions**: Check for updates, save settings, or reset to defaults.
-4. **System Tray**: Right-click the tray icon to show the window or exit the app.
-5. **Hotkey**: Press the configured hotkey (default: F6) to toggle clicking without the UI.
+## Automation tab
 
-## Configuration
+A *sequence* is a list of steps saved as JSON in `sequences/`. The images it looks
+for are PNGs in `templates/`.
 
-Settings are saved in `settings.json` in the same directory as the script. Default settings:
+| Step | What it does |
+| --- | --- |
+| Wait until image appears | Polls the screen until a template shows up (or times out) |
+| Wait until image disappears | Polls until it goes away |
+| Find image and click it | Clicks the centre of the match (plus an optional offset). *Until gone* re-clicks if the game missed it. *Fallback key* presses a key if the image never appears |
+| Click a fixed position | Click at x, y |
+| Press a key | e.g. `space`, `enter`, `ctrl+s` |
+| Wait | Fixed time with optional random extra |
+| Wait until a pixel is a colour | Cheap check for a single pixel |
 
-- Hold Key: None
-- Mouse Button: Left
-- Click Speed: 0.05s
-- Toggle Hotkey: F6
-- Minimize to Tray: Enabled
-- Notifications: Enabled
-- Sounds: Enabled
+Every step can be switched off, has a label, a *delay after*, and an **if it fails**
+policy: `stop`, `skip` (carry on), or `restart` (back to step 1).
+
+**Making your own:** *Add step → Find image and click it*, then *Capture…* next
+to Template. The app hides, waits a few seconds (so you can switch to the game),
+takes a screenshot, and lets you drag a box around the button. *Test* tells you
+right away whether the image is on screen and how confident the match is.
+
+**Resolution:** positions are stored for the sequence's reference resolution and
+scaled to your screen. Templates are scaled the same way, and if *look at other
+sizes* is on, nearby sizes are tried too.
+
+**Stopping:** the automation hotkey (default **F7**), the stop-everything hotkey
+(default **F8**), or slam the mouse into the **top-left corner** of the screen.
+
+### Bundled: tower defense retry loop
+
+`sequences/tower_defense_retry_loop.json` (built from a screen recording at 1920×1080):
+
+1. Wait for the **LEVEL CLEARED** popup (no time limit, the level can take as long as it needs)
+2. Click **RETRY** (re-click until the popup goes away)
+3. Wait for the setup screen (the **START (SPACE)** button)
+4. Click **2X** to turn on double speed (skipped if not found; untick this step if your speed setting persists)
+5. Click **START** (press Space if the button can't be found)
+6. Repeat
+
+If you start it while already on the setup screen, select step 3 and press
+*Start from selected step*. If the game runs at a very different resolution and
+the bundled images stop matching, recapture them with *Capture…*.
+
+## Settings tab
+
+Hotkeys, which monitor the game is on, how often to check the screen, match
+confidence, the corner failsafe, capture delay, tray/notification/sound options,
+update check. Settings save to `settings.json` next to the app (older v3
+`settings.json` files are migrated automatically).
+
+## Development
+
+```
+pip install -r requirements.txt pytest
+QT_QPA_PLATFORM=offscreen pytest
+```
+
+The tests drive the bundled sequence against real frames from the recording
+(`tests/fixtures/`) with a fake game that reacts to clicks.
+
+Layout: `tpac/clicker.py` (click + AFK engines), `tpac/vision.py` (capture and
+matching), `tpac/sequence.py` (step model and runner), `tpac/app.py` (window),
+`tpac/editor.py` / `tpac/picker.py` (dialogs and on-screen picker). The previous
+version is kept in `stable/`.
 
 ## Notes
 
-- **Compatibility**: Tested on Windows. The `keyboard` and `mouse` libraries may require root/admin privileges on some systems.
-- **Usage in Games**: Use responsibly. Some games, including Minecraft, may have rules against automation tools. Check the game's terms of service.
-- **Updates**: The app checks for updates by querying a version file hosted on GitHub.
-- **Dependencies**: Requires `PySide6` for the UI, `keyboard` and `mouse` for input simulation, and `requests` for update checks.
-
-## Troubleshooting
-
-- **Hotkey Errors**: If a hotkey fails to bind, try a different key or ensure no conflicts with other applications.
-- **No Clicks**: Ensure the mouse button is correctly set and the hold key (if set) is valid.
-- **App Not Starting**: Verify all dependencies are installed and Python is correctly set up.
-- **Tray Issues**: Disable "Minimize to tray" in settings if the tray icon causes problems.
-
-## License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
-## Disclaimer
-
-TP Auto Clicker is provided as-is. The developer is not responsible for any consequences from its use, including bans in games or system issues. Use at your own risk.
+Use responsibly. Some games forbid automation; check their rules. Provided as-is,
+with no responsibility for bans or other consequences.

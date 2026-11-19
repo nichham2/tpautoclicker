@@ -1,0 +1,10 @@
+settings.json
+settings.json.tmp
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+.venv/
+build/
+dist/
+*.spec

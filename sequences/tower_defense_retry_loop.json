@@ -1,0 +1,48 @@
+{
+  "name": "Tower defense: retry loop",
+  "notes": "Built from the screen recording. Waits for the LEVEL CLEARED popup, clicks RETRY, waits for the setup screen, turns on 2X speed, then clicks START. Loops until stopped. If you start this while already on the setup screen, select step 3 and use 'Start from selected step'.",
+  "reference_resolution": [1920, 1080],
+  "repeat": 0,
+  "steps": [
+    {
+      "type": "wait_image",
+      "label": "Wait for LEVEL CLEARED popup",
+      "template": "level_cleared.png",
+      "timeout": 0,
+      "delay_after": 1.5
+    },
+    {
+      "type": "click_image",
+      "label": "Click RETRY",
+      "template": "retry.png",
+      "timeout": 15,
+      "until_gone": true,
+      "on_fail": "restart"
+    },
+    {
+      "type": "wait_image",
+      "label": "Wait for setup screen (START button)",
+      "template": "start.png",
+      "timeout": 60,
+      "on_fail": "stop",
+      "delay_after": 0.5
+    },
+    {
+      "type": "click_image",
+      "label": "Turn on 2X speed",
+      "template": "double_speed.png",
+      "timeout": 5,
+      "on_fail": "skip",
+      "delay_after": 0.4
+    },
+    {
+      "type": "click_image",
+      "label": "Click START",
+      "template": "start.png",
+      "timeout": 10,
+      "until_gone": true,
+      "fallback_key": "space",
+      "on_fail": "stop"
+    }
+  ]
+}
