@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         # Never let the window get narrower than its controls need (measured
         # with the real fonts and DPI), otherwise buttons get cut off.
-        self.setMinimumWidth(max(560, self.minimumSizeHint().width()))
+        self._fit_min_width()
         self._create_tray()
         self._connect_bridge()
         self._setup_minibar()
@@ -148,8 +148,25 @@ class MainWindow(QMainWindow):
         area.setWidget(holder)
         area.viewport().setObjectName("page")
         # Never narrower than the content needs, so nothing is clipped at the right
-        area.setMinimumWidth(holder.minimumSizeHint().width() + area.verticalScrollBar().sizeHint().width())
+        area._page = widget
         return area
+
+    def _fit_min_width(self):
+        """Never let the window get narrower than its controls need, measured
+        with the real fonts, DPI and theme; otherwise buttons get cut off."""
+        from PySide6.QtWidgets import QScrollArea
+        for i in range(self.tabs.count()):
+            area = self.tabs.widget(i)
+            if isinstance(area, QScrollArea) and hasattr(area, "_page"):
+                page = area._page
+                page.setMaximumWidth(max(self.PAGE_MAX_WIDTH, page.minimumSizeHint().width()))
+                area.setMinimumWidth(area.widget().minimumSizeHint().width()
+                                     + area.verticalScrollBar().sizeHint().width())
+        self.setMinimumWidth(max(560, self.minimumSizeHint().width()))
+
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        self._fit_min_width()  # styles are fully applied once the window is shown
 
     @staticmethod
     def _form(group):
@@ -530,8 +547,9 @@ class MainWindow(QMainWindow):
         self.threshold.setValue(s["match_threshold"])
         self.threshold.setToolTip("How closely the screen must match a captured image. Lower = looser.")
         f.addRow("Match confidence:", self._left(self._sized(self.threshold, 160)))
-        self.multi_scale = QCheckBox("Also look for images at other sizes (different resolutions)")
+        self.multi_scale = QCheckBox("Also look for images at other sizes")
         self.multi_scale.setChecked(s["multi_scale"])
+        self.multi_scale.setToolTip("Helps when the game runs at a different resolution from the one the images were captured at")
         f.addRow(self.multi_scale)
         self.failsafe = QCheckBox("Stop when the mouse hits the top-left corner")
         self.failsafe.setChecked(s["mouse_corner_failsafe"])

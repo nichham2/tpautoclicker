@@ -113,9 +113,11 @@ def test_minibar_controls_main_window(monkeypatch, tmp_path):
     w.close()
 
 
-def test_layout_fits_at_narrow_and_wide_sizes(monkeypatch, tmp_path):
+@pytest.mark.parametrize("font_scale", [1.0, 1.6])
+def test_layout_fits_at_narrow_and_wide_sizes(monkeypatch, tmp_path, font_scale):
     """Nothing is cut off at the smallest window size, and fields don't stretch
-    across a maximised window."""
+    across a maximised window. The larger font stands in for wider system fonts
+    and Windows text scaling."""
     from PySide6.QtWidgets import QAbstractButton, QAbstractSpinBox, QApplication, QComboBox
 
     import tpac.app as appmod
@@ -124,6 +126,16 @@ def test_layout_fits_at_narrow_and_wide_sizes(monkeypatch, tmp_path):
     monkeypatch.setattr(appmod, "make_backend", lambda: (NullBackend(), None))
     monkeypatch.setattr(appmod, "SETTINGS_FILE", str(tmp_path / "settings.json"))
     app = QApplication.instance() or QApplication([])
+    if font_scale != 1.0:
+        import re
+
+        import tpac.theme as th
+        orig = th.stylesheet
+
+        def bigger(*a, **k):
+            return re.sub(r"font-size: (\d+)pt",
+                          lambda m: f"font-size: {round(int(m.group(1)) * font_scale)}pt", orig(*a, **k))
+        monkeypatch.setattr(th, "stylesheet", bigger)
     w = appmod.MainWindow()
     w.minibar.hide()
     try:
