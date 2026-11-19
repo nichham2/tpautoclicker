@@ -395,7 +395,7 @@ class MainWindow(QMainWindow):
         row.addWidget(QLabel("Name:"))
         row.addWidget(self.seq_name, 1)
         row.addWidget(QLabel("Repeat:"))
-        row.addWidget(self.seq_repeat)
+        row.addWidget(self._sized(self.seq_repeat, 150))
         v.addLayout(row)
 
         self.seq_notes = QLabel()
