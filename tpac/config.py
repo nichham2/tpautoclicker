@@ -79,6 +79,13 @@ DEFAULTS: dict[str, Any] = {
     "multi_scale": True,             # search nearby scales if not found at the expected one
     "mouse_corner_failsafe": True,   # slam the mouse into the top-left corner to stop
     "capture_delay_s": 3,
+    # Appearance
+    "theme_mode": "System",          # System / Light / Dark
+    "accent": "#6750A4",             # Material You seed colour
+    "show_minibar": True,            # always-on-top mini controls
+    "minibar_x": -1,                 # -1 = default spot (top-right)
+    "minibar_y": -1,
+    "minibar_opacity": 0.95,
     # App
     "minimize_to_tray": False,
     "minimize_on_start": True,      # get the window out of the way so it is not clicked

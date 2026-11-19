@@ -80,3 +80,34 @@ def test_gui_runs_bundled_sequence_against_fake_game(monkeypatch, tmp_path):
     assert "1 loop(s) completed" in w.lbl_seq.text()
     w.seq_dirty = False
     w.close()
+
+
+def test_minibar_controls_main_window(monkeypatch, tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    import tpac.app as appmod
+    from tpac.inputs import NullBackend
+
+    monkeypatch.setattr(appmod, "make_backend", lambda: (NullBackend(), None))
+    monkeypatch.setattr(appmod, "SETTINGS_FILE", str(tmp_path / "settings.json"))
+    app = QApplication.instance() or QApplication([])
+    w = appmod.MainWindow()
+    mb = w.minibar
+    assert mb.isVisible()
+    w.start_delay.setValue(0)
+    mb.btn_click.click()            # start clicker from the mini bar
+    app.processEvents()
+    assert w.clicker.running
+    mb.btn_stop.click()             # stop everything
+    w.clicker._thread.join(3)
+    app.processEvents()
+    assert not w.clicker.running
+    assert mb.btn_click.text().startswith("▶")
+    w.chk_minibar.setChecked(False)
+    assert not mb.isVisible() and w.settings["show_minibar"] is False
+    for mode in ("Light", "Dark"):  # theme switches without errors
+        w.theme_mode.setCurrentText(mode)
+        app.processEvents()
+        assert w.scheme.dark == (mode == "Dark")
+    w.seq_dirty = False
+    w.close()

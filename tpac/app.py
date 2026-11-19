@@ -8,7 +8,7 @@ import threading
 import webbrowser
 
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QDoubleSpinBox,
     QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
@@ -24,6 +24,8 @@ from .config import (
 )
 from .editor import CaptureHelper, KeyCaptureDialog, StepDialog
 from .inputs import enable_dpi_awareness, make_backend
+from .minibar import MiniBar
+from . import theme
 from .sequence import STEP_TYPES, Sequence, SequenceRunner, default_step, describe_step
 
 try:
@@ -88,10 +90,18 @@ class MainWindow(QMainWindow):
         self.runner: SequenceRunner | None = None
         self.capture = CaptureHelper(self._get_screen, lambda: self.capture_delay.value(), self)
 
+        self.scheme = None
+        self.minibar = MiniBar(self.settings["minibar_opacity"])
         self._apply_theme()
         self._build_ui()
         self._create_tray()
         self._connect_bridge()
+        self._setup_minibar()
+        try:  # follow Windows light/dark changes live when theme is "System"
+            QApplication.styleHints().colorSchemeChanged.connect(
+                lambda *_: self._apply_theme() if self.theme_mode.currentText() == "System" else None)
+        except AttributeError:
+            pass
         self._load_initial_sequence()
         self._bind_hotkeys()
 
@@ -103,12 +113,24 @@ class MainWindow(QMainWindow):
     # ==================================================================== UI
     def _build_ui(self):
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._clicker_tab(), "Clicker")
+        self.tabs.addTab(self._scroll(self._clicker_tab()), "Clicker")
         self.tabs.addTab(self._automation_tab(), "Automation")
         self.tabs.addTab(self._log_tab(), "Log")
-        self.tabs.addTab(self._settings_tab(), "Settings")
+        self.tabs.addTab(self._scroll(self._settings_tab()), "Settings")
         self.setCentralWidget(self.tabs)
         self.statusBar().showMessage("Ready")
+
+    @staticmethod
+    def _scroll(widget):
+        """Let tall tabs scroll instead of squashing their controls."""
+        from PySide6.QtWidgets import QFrame, QScrollArea
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.NoFrame)
+        widget.setObjectName("page")
+        area.setWidget(widget)
+        area.viewport().setObjectName("page")
+        return area
 
     # ---------------------------------------------------------------- clicker
     def _clicker_tab(self):
@@ -122,6 +144,7 @@ class MainWindow(QMainWindow):
         self.btn_click.clicked.connect(self.toggle_clicker)
         top.addWidget(self.btn_click, 3)
         self.lbl_clicks = QLabel("0 clicks")
+        self.lbl_clicks.setProperty("role", "big")
         self.lbl_clicks.setAlignment(Qt.AlignCenter)
         self.lbl_clicks.setMinimumWidth(120)
         top.addWidget(self.lbl_clicks, 1)
@@ -151,7 +174,7 @@ class MainWindow(QMainWindow):
         row.addWidget(self.lbl_cps)
         for label, ms in [("Slow", 200), ("Med", 100), ("Fast", 50), ("Max", 10)]:
             b = QPushButton(label)
-            b.setMaximumWidth(56)
+            b.setProperty("variant", "small")
             b.clicked.connect(lambda _=False, m=ms: self.interval.setValue(m))
             row.addWidget(b)
         f.addRow("Interval:", row)
@@ -281,7 +304,7 @@ class MainWindow(QMainWindow):
 
         self.seq_notes = QLabel()
         self.seq_notes.setWordWrap(True)
-        self.seq_notes.setStyleSheet("color: gray")
+        self.seq_notes.setProperty("role", "hint")
         v.addWidget(self.seq_notes)
 
         self.table = QTableWidget(0, 4)
@@ -300,7 +323,8 @@ class MainWindow(QMainWindow):
         v.addWidget(self.table, 1)
 
         row = QHBoxLayout()
-        add = QPushButton("Add step ▾")
+        add = QPushButton("Add step")
+        add.setObjectName("menu")
         menu = QMenu(add)
         for t, spec in STEP_TYPES.items():
             act = menu.addAction(spec["title"])
@@ -313,7 +337,8 @@ class MainWindow(QMainWindow):
             b = QPushButton(text)
             b.clicked.connect(fn)
             if text in ("▲", "▼"):
-                b.setMaximumWidth(36)
+                b.setProperty("variant", "small")
+                b.setToolTip("Move step up" if text == "▲" else "Move step down")
             row.addWidget(b)
         row.addStretch()
         v.addLayout(row)
@@ -332,7 +357,7 @@ class MainWindow(QMainWindow):
         v.addWidget(self.lbl_seq)
         tip = QLabel("Tip: slam the mouse into the top-left corner of the screen, or press the stop "
                      "hotkey, to stop instantly.")
-        tip.setStyleSheet("color: gray")
+        tip.setProperty("role", "hint")
         tip.setWordWrap(True)
         v.addWidget(tip)
         self._set_seq_ui(False)
@@ -417,6 +442,26 @@ class MainWindow(QMainWindow):
         f.addRow("Capture delay:", self.capture_delay)
         v.addWidget(g)
 
+        g = QGroupBox("Appearance")
+        f = QFormLayout(g)
+        self.theme_mode = QComboBox()
+        self.theme_mode.addItems(["System", "Light", "Dark"])
+        self.theme_mode.setCurrentText(s["theme_mode"])
+        self.theme_mode.currentTextChanged.connect(lambda _: self._apply_theme())
+        f.addRow("Theme:", self.theme_mode)
+        self.accent = QComboBox()
+        for name, hexc in theme.SEEDS.items():
+            self.accent.addItem(self._swatch(hexc), name, hexc)
+        self.accent.addItem("Custom…", "custom")
+        self._select_accent(s["accent"])
+        self.accent.activated.connect(self._on_accent)
+        f.addRow("Accent colour:", self.accent)
+        self.chk_minibar = QCheckBox("Show mini controls on top of other windows")
+        self.chk_minibar.setChecked(s["show_minibar"])
+        self.chk_minibar.toggled.connect(self._set_minibar_visible)
+        f.addRow(self.chk_minibar)
+        v.addWidget(g)
+
         g = QGroupBox("App")
         f = QVBoxLayout(g)
         self.chk_min_start = QCheckBox("Minimise this window when starting")
@@ -442,10 +487,73 @@ class MainWindow(QMainWindow):
         return w
 
     def _apply_theme(self):
-        app = QApplication.instance()
-        bg = app.palette().color(QPalette.Window)
-        if 0.299 * bg.redF() + 0.587 * bg.greenF() + 0.114 * bg.blueF() < 0.5:
-            app.setStyle("Fusion")
+        mode = self.theme_mode.currentText() if hasattr(self, "theme_mode") else self.settings["theme_mode"]
+        seed = self.settings.get("accent") or theme.SEEDS["Purple"]
+        self.scheme = theme.apply(QApplication.instance(), mode, seed)
+        self.minibar.apply_scheme(self.scheme)
+        if hasattr(self, "btn_seq"):
+            self._refresh_button_texts()
+
+    @staticmethod
+    def _swatch(hexc: str) -> QIcon:
+        pm = QPixmap(16, 16)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(QColor(hexc))
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(1, 1, 14, 14)
+        p.end()
+        return QIcon(pm)
+
+    def _select_accent(self, hexc: str):
+        i = self.accent.findData(hexc)
+        if i < 0:
+            self.accent.insertItem(self.accent.count() - 1, self._swatch(hexc), hexc, hexc)
+            i = self.accent.count() - 2
+        self.accent.setCurrentIndex(i)
+
+    def _on_accent(self, i):
+        data = self.accent.itemData(i)
+        if data == "custom":
+            from PySide6.QtWidgets import QColorDialog
+            c = QColorDialog.getColor(QColor(self.settings["accent"]), self, "Pick an accent colour")
+            if not c.isValid():
+                self._select_accent(self.settings["accent"])
+                return
+            data = c.name()
+            self._select_accent(data)
+        self.settings["accent"] = data
+        self._apply_theme()
+
+    # ---- mini controls -----------------------------------------------------
+    def _setup_minibar(self):
+        mb = self.minibar
+        mb.toggle_clicker.connect(lambda: self.toggle_clicker(from_hotkey=False, from_minibar=True))
+        mb.toggle_sequence.connect(lambda: self.toggle_sequence(0, from_minibar=True))
+        mb.stop_all.connect(self.stop_all)
+        mb.show_main.connect(self._show_window)
+        mb.hidden_by_user.connect(lambda: self.chk_minibar.setChecked(False))
+        mb.moved.connect(lambda x, y: self.settings.update(minibar_x=x, minibar_y=y))
+        mb.opacity_changed.connect(lambda o: self.settings.update(minibar_opacity=round(o, 2)))
+        x, y = self.settings["minibar_x"], self.settings["minibar_y"]
+        if x < 0 or y < 0:
+            mb.place_default()
+        else:
+            mb.place_at(x, y)
+        self._refresh_button_texts()
+        if self.settings["show_minibar"]:
+            mb.show()
+
+    def _set_minibar_visible(self, on: bool):
+        self.settings["show_minibar"] = on
+        if on:
+            self.minibar.show()
+            self.minibar.raise_()
+        else:
+            self.minibar.hide()
+        if hasattr(self, "act_minibar"):
+            self.act_minibar.setChecked(on)
 
     def _create_tray(self):
         self.tray = QSystemTrayIcon(_icon(), self)
@@ -453,6 +561,10 @@ class MainWindow(QMainWindow):
         menu.addAction("Show", self._show_window)
         menu.addAction("Start/stop clicker", self.toggle_clicker)
         menu.addAction("Start/stop automation", lambda: self.toggle_sequence(0))
+        self.act_minibar = menu.addAction("Mini controls")
+        self.act_minibar.setCheckable(True)
+        self.act_minibar.setChecked(self.settings["show_minibar"])
+        self.act_minibar.toggled.connect(lambda on: self.chk_minibar.setChecked(on))
         menu.addSeparator()
         menu.addAction("Exit", QApplication.instance().quit)
         self.tray.setContextMenu(menu)
@@ -470,12 +582,16 @@ class MainWindow(QMainWindow):
         b = self.bridge
         b.log.connect(self.log)
         b.clicker_state.connect(self._on_clicker_state)
-        b.clicker_count.connect(lambda n: self.lbl_clicks.setText(f"{n:,} clicks"))
+        b.clicker_count.connect(self._on_click_count)
         b.afk_state.connect(self._on_afk_state)
         b.seq_state.connect(self._on_seq_state)
         b.seq_step.connect(self._on_seq_step)
         b.seq_loop.connect(self._on_seq_loop)
         b.hotkey.connect(self._on_hotkey)
+
+    def _on_click_count(self, n):
+        self.lbl_clicks.setText(f"{n:,} clicks")
+        self.minibar.set_click_count(n)
 
     def log(self, msg: str):
         from datetime import datetime
@@ -520,6 +636,8 @@ class MainWindow(QMainWindow):
             return
         self._set_clicker_ui(self.clicker.running)
         self._set_seq_ui(self.runner is not None and self.runner.running)
+        st = self.settings
+        self.minibar.set_hotkeys(st.get("hotkey", ""), st.get("sequence_hotkey", ""), st.get("panic_hotkey", ""))
 
     # ================================================================ clicker
     def _click_config(self) -> ClickConfig:
@@ -536,7 +654,7 @@ class MainWindow(QMainWindow):
             start_delay_s=self.start_delay.value(),
         )
 
-    def toggle_clicker(self, from_hotkey=False):
+    def toggle_clicker(self, from_hotkey=False, from_minibar=False):
         if self.clicker.running:
             self.clicker.stop()
             return
@@ -545,7 +663,7 @@ class MainWindow(QMainWindow):
             return
         cfg = self._click_config()
         if not from_hotkey:
-            if self.chk_min_start.isChecked():
+            if self.chk_min_start.isChecked() and not from_minibar:
                 self.showMinimized()
             if cfg.fixed_pos is None and cfg.start_delay_s < 2:
                 cfg.start_delay_s = 2.0  # otherwise the first click lands on our own button
@@ -560,6 +678,14 @@ class MainWindow(QMainWindow):
     def _set_clicker_ui(self, running):
         hk = self.settings.get("hotkey", "")
         self.btn_click.setText(("■ Stop clicking" if running else "▶ Start clicking") + (f"   [{hk.upper()}]" if hk else ""))
+        self._set_variant(self.btn_click, "running" if running else "filled")
+        self.minibar.set_clicker_running(running)
+
+    @staticmethod
+    def _set_variant(btn, variant):
+        btn.setProperty("variant", variant)
+        btn.style().unpolish(btn)
+        btn.style().polish(btn)
 
     def toggle_afk(self):
         if self.afk.running:
@@ -618,7 +744,7 @@ class MainWindow(QMainWindow):
             problems.append("The sequence has no enabled steps")
         return problems
 
-    def toggle_sequence(self, start_at=0, from_hotkey=False):
+    def toggle_sequence(self, start_at=0, from_hotkey=False, from_minibar=False):
         if self.runner is not None and self.runner.running:
             self.runner.stop()
             return
@@ -646,7 +772,7 @@ class MainWindow(QMainWindow):
             scan_interval=self.scan.value(), corner_failsafe=self.failsafe.isChecked(),
             log=b.log.emit, on_state=b.seq_state.emit, on_step=b.seq_step.emit, on_loop=b.seq_loop.emit,
         )
-        if not from_hotkey and self.chk_min_start.isChecked():
+        if not from_hotkey and not from_minibar and self.chk_min_start.isChecked():
             self.showMinimized()
         self.runner.start(copy.deepcopy(self.seq), start_at)
 
@@ -658,17 +784,21 @@ class MainWindow(QMainWindow):
     def _set_seq_ui(self, running):
         hk = self.settings.get("sequence_hotkey", "")
         self.btn_seq.setText(("■ Stop automation" if running else "▶ Start automation") + (f"   [{hk.upper()}]" if hk else ""))
+        self._set_variant(self.btn_seq, "running" if running else "filled")
+        self.minibar.set_sequence_running(running)
         self.btn_seq_from.setEnabled(not running)
 
     def _on_seq_step(self, idx, loop):
         if idx < 0:
             self.lbl_seq.setText(f"Idle — {loop} loop(s) completed")
+            self.minibar.set_sequence_status(f"Automation idle · {loop} loop(s) done" if loop else "")
             self.table.clearSelection()
             return
         self.table.selectRow(idx)
         st = self.seq.steps[idx] if idx < len(self.seq.steps) else {}
         name = st.get("label") or STEP_TYPES.get(st.get("type"), {}).get("title", "")
         self.lbl_seq.setText(f"Loop {loop + 1} · step {idx + 1}: {name}")
+        self.minibar.set_sequence_status(f"Loop {loop + 1} · {name}")
 
     def _on_seq_loop(self, loops, secs):
         self.statusBar().showMessage(f"{loops} loop(s) done · last one took {secs:.0f}s")
@@ -914,6 +1044,8 @@ class MainWindow(QMainWindow):
             "mouse_corner_failsafe": self.failsafe.isChecked(),
             "capture_delay_s": self.capture_delay.value(),
             "minimize_on_start": self.chk_min_start.isChecked(),
+            "theme_mode": self.theme_mode.currentText(),
+            "show_minibar": self.chk_minibar.isChecked(),
             "minimize_to_tray": self.chk_tray.isChecked(),
             "notifications": self.chk_notif.isChecked(),
             "sounds": self.chk_sound.isChecked(),
@@ -987,6 +1119,7 @@ class MainWindow(QMainWindow):
         QApplication.instance().quit()
 
     def _on_quit(self):
+        self.minibar.hide()
         self.clicker.stop()
         self.afk.stop()
         if self.runner is not None:
