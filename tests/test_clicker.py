@@ -102,3 +102,30 @@ def test_install_bundled_files_copies_without_overwriting(tmp_path, monkeypatch)
     cfg.install_bundled_files()
     assert (app / "templates" / "a.png").read_bytes() == b"mine"
     assert (app / "templates" / "b.png").read_bytes() == b"new"
+
+
+def test_unedited_old_bundled_sequence_is_upgraded(tmp_path, monkeypatch):
+    import subprocess
+
+    import tpac.config as cfg
+    old = subprocess.run(["git", "show", "850c8c7:sequences/tower_defense_retry_loop.json"],
+                         cwd=ROOT, capture_output=True)
+    if old.returncode != 0:
+        import pytest
+        pytest.skip("git history not available")
+    bundle = tmp_path / "bundle"
+    (bundle / "sequences").mkdir(parents=True)
+    new = open(os.path.join(ROOT, "sequences", "tower_defense_retry_loop.json"), "rb").read()
+    (bundle / "sequences" / "tower_defense_retry_loop.json").write_bytes(new)
+    (bundle / "sequences" / "mine.json").write_bytes(b"{}")
+    app = tmp_path / "app"
+    (app / "sequences").mkdir(parents=True)
+    (app / "sequences" / "tower_defense_retry_loop.json").write_bytes(old.stdout.replace(b"\n", b"\r\n"))
+    (app / "sequences" / "mine.json").write_bytes(b'{"edited": true}')
+    monkeypatch.setattr(cfg.sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setattr(cfg, "app_dir", lambda: str(app))
+    monkeypatch.setattr(cfg, "TEMPLATES_DIR", str(app / "templates"))
+    monkeypatch.setattr(cfg, "SEQUENCES_DIR", str(app / "sequences"))
+    cfg.install_bundled_files()
+    assert (app / "sequences" / "tower_defense_retry_loop.json").read_bytes() == new
+    assert (app / "sequences" / "mine.json").read_bytes() == b'{"edited": true}'

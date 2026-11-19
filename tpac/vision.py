@@ -91,7 +91,7 @@ class StaticScreen:
 
 def load_image(path: str) -> np.ndarray:
     if cv2 is None:
-        raise RuntimeError("opencv-python is not installed: pip install opencv-python")
+        raise RuntimeError("opencv-python is not installed: pip install opencv-python-headless")
     data = np.fromfile(path, dtype=np.uint8)  # handles non-ASCII Windows paths
     img = cv2.imdecode(data, cv2.IMREAD_COLOR)
     if img is None:
@@ -110,7 +110,7 @@ class Matcher:
     def __init__(self, templates_dir: str, reference_height: int = 1080,
                  threshold: float = 0.8, multi_scale: bool = True) -> None:
         if cv2 is None:
-            raise RuntimeError("opencv-python is not installed: pip install opencv-python")
+            raise RuntimeError("opencv-python is not installed: pip install opencv-python-headless")
         self.templates_dir = templates_dir
         self.reference_height = reference_height
         self.threshold = threshold

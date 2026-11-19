@@ -46,10 +46,34 @@ def install_bundled_files() -> None:
             os.makedirs(dst, exist_ok=True)
             for name in os.listdir(src):
                 target = os.path.join(dst, name)
-                if not os.path.exists(target):
+                if not os.path.exists(target) or _is_superseded(target):
                     shutil.copy2(os.path.join(src, name), target)
         except OSError:
             pass
+
+
+# Fingerprints of bundled files from earlier releases. If the copy next to the
+# exe is byte-for-byte one of these (the user never edited it), the newer
+# bundled version replaces it; edited files are always left alone.
+_SUPERSEDED = {
+    # tower_defense_retry_loop.json v4.0.0: waited for the LEVEL CLEARED title,
+    # which missed other results such as THE BASE DROWNED.
+    "9027050950f71ca2ab6862ccd5d9e0fc787c97589d664890cc467f7094fae4ad",
+}
+
+
+def _fingerprint(path: str) -> str:
+    import hashlib
+
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def _is_superseded(path: str) -> bool:
+    try:
+        return _fingerprint(path) in _SUPERSEDED
+    except OSError:
+        return False
 
 DEFAULTS: dict[str, Any] = {
     # Clicker
@@ -79,6 +103,13 @@ DEFAULTS: dict[str, Any] = {
     "multi_scale": True,             # search nearby scales if not found at the expected one
     "mouse_corner_failsafe": True,   # slam the mouse into the top-left corner to stop
     "capture_delay_s": 3,
+    # Appearance
+    "theme_mode": "System",          # System / Light / Dark
+    "accent": "#6750A4",             # Material You seed colour
+    "show_minibar": True,            # always-on-top mini controls
+    "minibar_x": -1,                 # -1 = default spot (top-right)
+    "minibar_y": -1,
+    "minibar_opacity": 0.95,
     # App
     "minimize_to_tray": False,
     "minimize_on_start": True,      # get the window out of the way so it is not clicked

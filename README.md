@@ -27,6 +27,20 @@ To publish a new release: push a tag like `v4.0.1` and the workflow attaches the
 > administrator if a game ignores the clicks (games running as admin only accept
 > input from admin programs).
 
+## Mini controls (always on top)
+
+A small floating bar sits on top of the game with **Click**, **Auto** and **■ stop
+everything** buttons plus a live status line (click count, or which loop/step the
+automation is on). It never steals focus from the game. Drag it by the grip,
+right-click for opacity, hide it with ✕, and turn it back on in *Settings → Appearance*
+or the tray menu. Games in exclusive fullscreen draw over everything; use
+borderless/windowed fullscreen to see the bar.
+
+## Look
+
+Material You (Material Design 3) styling with light/dark that follows Windows,
+and a choice of accent colours (or pick your own) in *Settings → Appearance*.
+
 ## Clicker tab
 
 - **Start/stop** with the button or the hotkey (default **F6**). Stopping is instant.
@@ -72,7 +86,7 @@ sizes* is on, nearby sizes are tried too.
 
 `sequences/tower_defense_retry_loop.json` (built from a screen recording at 1920×1080):
 
-1. Wait for the **LEVEL CLEARED** popup (no time limit, the level can take as long as it needs)
+1. Wait for the end-of-level popup, whatever its title (LEVEL CLEARED, THE BASE DROWNED, ...), by looking for its **RETRY** button (no time limit)
 2. Click **RETRY** (re-click until the popup goes away)
 3. Wait for the setup screen (the **START (SPACE)** button)
 4. Click **2X** to turn on double speed (skipped if not found; untick this step if your speed setting persists)
