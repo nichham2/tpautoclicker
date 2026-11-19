@@ -947,14 +947,20 @@ class MainWindow(QMainWindow):
 
     def _check_update(self):
         try:
-            import requests
-            r = requests.get(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest",
-                             timeout=6, headers={"Accept": "application/vnd.github+json"})
-            if r.status_code == 404:
-                QMessageBox.information(self, "Updates", "No releases have been published yet.")
-                return
-            r.raise_for_status()
-            data = r.json()
+            import json
+            import urllib.error
+            import urllib.request
+            req = urllib.request.Request(
+                f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "TPAutoClicker"})
+            try:
+                with urllib.request.urlopen(req, timeout=6) as r:
+                    data = json.load(r)
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    QMessageBox.information(self, "Updates", "No releases have been published yet.")
+                    return
+                raise
             latest = data.get("tag_name", "0")
             if _version_tuple(latest) > _version_tuple(VERSION):
                 if QMessageBox.question(self, "Update available",

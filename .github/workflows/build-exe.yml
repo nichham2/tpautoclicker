@@ -34,9 +34,13 @@ jobs:
       - name: Build exe
         run: pyinstaller --noconfirm tpautoclicker.spec
 
-      - name: Smoke test the exe
+      - name: Self-test the exe
         shell: pwsh
         run: |
+          $size = (Get-Item dist\TPAutoClicker.exe).Length / 1MB
+          "exe size: {0:N1} MB" -f $size | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+          $t = Start-Process dist\TPAutoClicker.exe -ArgumentList "--self-test" -Wait -PassThru
+          if ($t.ExitCode -ne 0) { throw "self-test failed with exit code $($t.ExitCode)" }
           $p = Start-Process dist\TPAutoClicker.exe -PassThru
           Start-Sleep -Seconds 15
           if ($p.HasExited) { throw "exe exited early with code $($p.ExitCode)" }
