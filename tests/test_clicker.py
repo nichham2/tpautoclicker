@@ -129,3 +129,15 @@ def test_unedited_old_bundled_sequence_is_upgraded(tmp_path, monkeypatch):
     cfg.install_bundled_files()
     assert (app / "sequences" / "tower_defense_retry_loop.json").read_bytes() == new
     assert (app / "sequences" / "mine.json").read_bytes() == b'{"edited": true}'
+
+
+def test_v4_settings_move_to_dashboard_look(tmp_path):
+    p = tmp_path / "settings.json"
+    p.write_text(json.dumps({"theme_mode": "System", "accent": "#6750A4"}))
+    s = load_settings(str(p))
+    assert s["theme_mode"] == "Dark" and s["accent"] == "#6C5DD3" and s["design"] == 2
+    # a colour the user picked is kept, and later choices are respected
+    p.write_text(json.dumps({"theme_mode": "Light", "accent": "#0B57D0"}))
+    assert load_settings(str(p))["accent"] == "#0B57D0"
+    p.write_text(json.dumps({"theme_mode": "Light", "accent": "#0B57D0", "design": 2}))
+    assert load_settings(str(p))["theme_mode"] == "Light"

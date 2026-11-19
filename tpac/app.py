@@ -114,14 +114,102 @@ class MainWindow(QMainWindow):
         QApplication.instance().aboutToQuit.connect(self._on_quit)
 
     # ==================================================================== UI
+    PAGES = [("clicker", "Clicker"), ("automation", "Automation"), ("log", "Log"), ("settings", "Settings")]
+
     def _build_ui(self):
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._scroll(self._clicker_tab()), "Clicker")
-        self.tabs.addTab(self._automation_tab(), "Automation")
-        self.tabs.addTab(self._log_tab(), "Log")
-        self.tabs.addTab(self._scroll(self._settings_tab()), "Settings")
-        self.setCentralWidget(self.tabs)
+        builders = [lambda: self._scroll(self._titled(self._clicker_tab(), "Clicker")),
+                    lambda: self._titled(self._automation_tab(), "Automation"),
+                    lambda: self._titled(self._log_tab(), "Log"),
+                    lambda: self._scroll(self._titled(self._settings_tab(), "Settings"))]
+        for (_key, name), build in zip(self.PAGES, builders):
+            self.tabs.addTab(build(), name)
+        self.tabs.tabBar().hide()  # the sidebar replaces the tab bar
+
+        central = QWidget()
+        h = QHBoxLayout(central)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        h.addWidget(self._sidebar())
+        right = QVBoxLayout()
+        right.setContentsMargins(0, 0, 0, 0)
+        right.setSpacing(0)
+        right.addWidget(self.tabs, 1)
+        from PySide6.QtWidgets import QStatusBar
+        self._status = QStatusBar()
+        self._status.setSizeGripEnabled(False)
+        right.addWidget(self._status)
+        h.addLayout(right, 1)
+        self.setCentralWidget(central)
+        self.tabs.currentChanged.connect(self._sync_nav)
+        self._sync_nav(0)
         self.statusBar().showMessage("Ready")
+
+    def statusBar(self):
+        """The status line sits under the pages, so the sidebar runs full height."""
+        return self._status
+
+    def _sidebar(self):
+        from PySide6.QtWidgets import QButtonGroup, QFrame, QToolButton
+        from PySide6.QtCore import QSize
+        bar = QFrame()
+        bar.setObjectName("sidebar")
+        bar.setFixedWidth(72)
+        v = QVBoxLayout(bar)
+        v.setContentsMargins(14, 18, 14, 18)
+        v.setSpacing(10)
+        self.logo = QLabel()
+        self.logo.setObjectName("logo")
+        self.logo.setAlignment(Qt.AlignCenter)
+        v.addWidget(self.logo, 0, Qt.AlignHCenter)
+        v.addSpacing(22)
+        self.nav_group = QButtonGroup(bar)
+        self.nav_group.setExclusive(True)
+        self.nav_buttons = []
+        for i, (key, name) in enumerate(self.PAGES):
+            b = QToolButton()
+            b.setObjectName("nav")
+            b.setCheckable(True)
+            b.setToolTip(name)
+            b.setIconSize(QSize(24, 24))
+            b.setProperty("icon_key", key)
+            b.clicked.connect(lambda _=False, idx=i: self.tabs.setCurrentIndex(idx))
+            self.nav_group.addButton(b, i)
+            self.nav_buttons.append(b)
+            v.addWidget(b, 0, Qt.AlignHCenter)
+        v.addStretch()
+        self.nav_mini = QToolButton()
+        self.nav_mini.setObjectName("nav")
+        self.nav_mini.setCheckable(True)
+        self.nav_mini.setToolTip("Mini controls on top of other windows")
+        self.nav_mini.setIconSize(QSize(24, 24))
+        self.nav_mini.setProperty("icon_key", "mini")
+        self.nav_mini.setChecked(self.settings["show_minibar"])
+        self.nav_mini.toggled.connect(lambda on: self.chk_minibar.setChecked(on))
+        v.addWidget(self.nav_mini, 0, Qt.AlignHCenter)
+        self._paint_sidebar_icons()
+        return bar
+
+    def _paint_sidebar_icons(self):
+        if not hasattr(self, "nav_buttons"):
+            return
+        from . import icons
+        for b in self.nav_buttons + [self.nav_mini]:
+            b.setIcon(icons.icon(b.property("icon_key"), "#ffffff"))
+        self.logo.setPixmap(icons.logo(self.scheme.primary if self.scheme else "#6C5DD3", 40))
+
+    def _sync_nav(self, idx):
+        if 0 <= idx < len(self.nav_buttons):
+            self.nav_buttons[idx].setChecked(True)
+
+    @staticmethod
+    def _titled(widget, title):
+        """Big page heading, like the design's 'Dashboard' title."""
+        lbl = QLabel(title)
+        lbl.setProperty("role", "title")
+        widget.layout().insertWidget(0, lbl)
+        widget.layout().setContentsMargins(24, 18, 24, 12)
+        return widget
 
     PAGE_MAX_WIDTH = 820
 
@@ -216,16 +304,17 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(w)
 
         top = QHBoxLayout()
+        top.setSpacing(14)
+        card, self.lbl_clicks, self.lbl_stat_cps = self._stat_card("Clicks this run", "0")
+        top.addWidget(card, 1)
+        card, self.lbl_stat_status, self.lbl_stat_hint = self._stat_card("Status", "Idle")
+        top.addWidget(card, 1)
+        v.addLayout(top)
+        v.addSpacing(6)
         self.btn_click = QPushButton()
         self.btn_click.setMinimumHeight(48)
         self.btn_click.clicked.connect(self.toggle_clicker)
-        top.addWidget(self.btn_click, 3)
-        self.lbl_clicks = QLabel("0 clicks")
-        self.lbl_clicks.setProperty("role", "big")
-        self.lbl_clicks.setAlignment(Qt.AlignCenter)
-        self.lbl_clicks.setMinimumWidth(120)
-        top.addWidget(self.lbl_clicks, 1)
-        v.addLayout(top)
+        v.addWidget(self.btn_click)
 
         forms = []
         g = QGroupBox("Click")
@@ -378,9 +467,31 @@ class MainWindow(QMainWindow):
         self._set_clicker_ui(False)
         return w
 
+    @staticmethod
+    def _stat_card(caption, value):
+        """Dashboard-style card: small caption, big number, coloured detail line."""
+        from PySide6.QtWidgets import QFrame
+        card = QFrame()
+        card.setObjectName("stat")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(20, 14, 20, 14)
+        v.setSpacing(2)
+        cap = QLabel(caption)
+        cap.setProperty("role", "statlabel")
+        big = QLabel(value)
+        big.setProperty("role", "stat")
+        sub = QLabel("")
+        sub.setProperty("role", "good")
+        v.addWidget(cap)
+        v.addWidget(big)
+        v.addWidget(sub)
+        return card, big, sub
+
     def _update_cps(self):
         ms = self.interval.value()
         self.lbl_cps.setText(f"≈ {1000.0 / ms:.1f} clicks/s")
+        if hasattr(self, "lbl_stat_cps"):
+            self.lbl_stat_cps.setText(f"+{1000.0 / ms:.1f} per second")
 
     # ------------------------------------------------------------- automation
     def _automation_tab(self):
@@ -611,9 +722,10 @@ class MainWindow(QMainWindow):
 
     def _apply_theme(self):
         mode = self.theme_mode.currentText() if hasattr(self, "theme_mode") else self.settings["theme_mode"]
-        seed = self.settings.get("accent") or theme.SEEDS["Purple"]
+        seed = self.settings.get("accent") or theme.SEEDS["Violet"]
         self.scheme = theme.apply(QApplication.instance(), mode, seed)
         self.minibar.apply_scheme(self.scheme)
+        self._paint_sidebar_icons()
         if hasattr(self, "btn_seq"):
             self._refresh_button_texts()
 
@@ -677,6 +789,8 @@ class MainWindow(QMainWindow):
             self.minibar.hide()
         if hasattr(self, "act_minibar"):
             self.act_minibar.setChecked(on)
+        if hasattr(self, "nav_mini") and self.nav_mini.isChecked() != on:
+            self.nav_mini.setChecked(on)
 
     def _create_tray(self):
         self.tray = QSystemTrayIcon(_icon(), self)
@@ -713,7 +827,7 @@ class MainWindow(QMainWindow):
         b.hotkey.connect(self._on_hotkey)
 
     def _on_click_count(self, n):
-        self.lbl_clicks.setText(f"{n:,} clicks")
+        self.lbl_clicks.setText(f"{n:,}")
         self.minibar.set_click_count(n)
 
     def log(self, msg: str):
@@ -800,6 +914,8 @@ class MainWindow(QMainWindow):
 
     def _set_clicker_ui(self, running):
         hk = self.settings.get("hotkey", "")
+        self.lbl_stat_status.setText("Clicking" if running else "Idle")
+        self.lbl_stat_hint.setText(f"press {hk.upper()} to {'stop' if running else 'start'}" if hk else "")
         self.btn_click.setText(("■ Stop clicking" if running else "▶ Start clicking") + (f"   [{hk.upper()}]" if hk else ""))
         self._set_variant(self.btn_click, "running" if running else "filled")
         self.minibar.set_clicker_running(running)

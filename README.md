@@ -42,10 +42,13 @@ borderless/windowed fullscreen to see the bar.
 
 ## Look
 
-Material You (Material Design 3) styling with light/dark that follows Windows,
-and a choice of accent colours (or pick your own) in *Settings → Appearance*.
+A dark dashboard design: navy panels, rounded cards, big stat numbers and a
+coloured icon sidebar for switching between Clicker, Automation, Log and
+Settings (the button at the bottom of the sidebar shows/hides the mini
+controls). Dark is the default; *Settings → Appearance* also has Light and
+System modes and a choice of accent colours (or pick your own).
 
-## Clicker tab
+## Clicker page
 
 - **Start/stop** with the button or the hotkey (default **F6**). Stopping is instant.
 - **Interval** in milliseconds with presets, live clicks-per-second readout.
@@ -56,7 +59,7 @@ and a choice of accent colours (or pick your own) in *Settings → Appearance*.
 - **Hold key** while clicking (released when you stop), and a **start delay**.
 - **Anti-AFK**: nudges the mouse a few pixels every N seconds and puts it back.
 
-## Automation tab
+## Automation page
 
 A *sequence* is a list of steps saved as JSON in `sequences/`. The images it looks
 for are PNGs in `templates/`.
