@@ -9,3 +9,5 @@ build/
 dist/
 
 .venv/
+tpautoclicker.log
+settings.json.bad

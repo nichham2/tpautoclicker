@@ -19,6 +19,10 @@ To build the exe yourself on Windows: install Python, then double-click `build.b
 (or run it from a terminal). It sets up a private environment in `.venv`, runs the
 tests, builds `dist\TPAutoClicker.exe` and self-tests it.
 
+Releases come with a `SHA256SUMS.txt`. To check a download, run
+`certutil -hashfile TPAutoClicker.exe SHA256` and compare. CI builds with the exact
+versions in `constraints-ci.txt`.
+
 To publish a new release: write its notes in `release-notes/vX.Y.Z.md`, then run the
 **Build Windows exe** workflow by hand (Actions tab → *Run workflow*) with that tag in
 *draft_release*. It builds, tests and attaches the exe to a **draft** release for you to
@@ -30,9 +34,10 @@ review and publish. (Pushing a `vX.Y.Z` tag still publishes straight away.)
 2. `pip install -r requirements.txt`
 3. `python tpautoclicker.py`
 
-> On Linux the `keyboard` package needs root. On Windows, run the app as
-> administrator if a game ignores the clicks (games running as admin only accept
-> input from admin programs).
+> On Linux the `keyboard` package needs root. On Windows, only run the app as
+> administrator if the game itself runs as admin and ignores the clicks (games
+> running as admin only accept input from admin programs). Anything a sequence
+> presses then also runs as admin.
 
 ## Mini controls (always on top)
 
@@ -91,7 +96,18 @@ scaled to your screen. Templates are scaled the same way, and if *look at other
 sizes* is on, nearby sizes are tried too.
 
 **Stopping:** the automation hotkey (default **F7**), the stop-everything hotkey
-(default **F8**), or slam the mouse into the **top-left corner** of the screen.
+(default **F8**), or slam the mouse into the **top-left corner** of the game's
+monitor. The corner also stops the clicker, and in *Fixed spot* mode just
+grabbing the mouse and moving it away stops the clicker too (*Settings →
+Stop when the mouse hits the top-left corner*).
+
+**Sharing sequences:** a sequence is a macro, so only open ones from people you
+trust. When you open a file from outside `sequences/`, the app lists every key
+it presses first. Keys that control Windows rather than the game (the Windows
+key, Alt+Tab, Alt+F4, Ctrl+Esc, ...) are blocked until you allow them for that
+sequence. Template images must live in `templates/`.
+
+If something goes wrong, details are written to `tpautoclicker.log` next to the app.
 
 ### Bundled: tower defense retry loop
 

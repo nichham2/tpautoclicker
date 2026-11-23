@@ -50,9 +50,20 @@ class Screen:
         if sct is None:
             import mss
 
-            sct = mss.mss()
+            sct = getattr(mss, "MSS", mss.mss)()
             self._local.sct = sct
         return sct
+
+    def close_thread(self) -> None:
+        """Release this thread's capture handle (each automation run uses a
+        new worker thread, so without this every run leaks one)."""
+        sct = getattr(self._local, "sct", None)
+        if sct is not None:
+            self._local.sct = None
+            try:
+                sct.close()
+            except Exception:
+                pass
 
     def monitor(self) -> dict:
         mons = self._sct().monitors
@@ -106,6 +117,23 @@ def save_image(path: str, img: np.ndarray) -> None:
     buf.tofile(path)
 
 
+def template_path(templates_dir: str, name: str) -> str:
+    """Full path of a template, which must stay inside ``templates_dir``.
+
+    Sequence files can be shared, so a template name like ``../../x.png`` or an
+    absolute path must not make the app read files from elsewhere on disk.
+    """
+    root = os.path.realpath(templates_dir)
+    path = os.path.realpath(os.path.join(root, str(name)))
+    try:
+        inside = os.path.commonpath([path, root]) == root
+    except ValueError:  # different drives on Windows
+        inside = False
+    if not name or not inside or path == root:
+        raise ValueError(f"Template {name!r} must be an image inside the templates folder")
+    return path
+
+
 class Matcher:
     def __init__(self, templates_dir: str, reference_height: int = 1080,
                  threshold: float = 0.8, multi_scale: bool = True) -> None:
@@ -121,8 +149,7 @@ class Matcher:
 
     def template(self, name: str) -> np.ndarray:
         if name not in self._cache:
-            path = name if os.path.isabs(name) else os.path.join(self.templates_dir, name)
-            self._cache[name] = load_image(path)
+            self._cache[name] = load_image(template_path(self.templates_dir, name))
         return self._cache[name]
 
     def _scaled_template(self, name: str, scale: float) -> np.ndarray:
