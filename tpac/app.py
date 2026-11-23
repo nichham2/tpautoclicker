@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from . import APP_NAME, REPO_NAME, REPO_OWNER, VERSION
 from .clicker import AfkEngine, ClickConfig, ClickEngine
+from . import config as _config
 from .config import (
     DEFAULTS, SEQUENCES_DIR, SETTINGS_FILE, TEMPLATES_DIR, app_dir, bundled_dir,
     install_bundled_files, load_settings, save_settings,
@@ -25,13 +26,25 @@ from .config import (
 from .editor import CaptureHelper, KeyCaptureDialog, StepDialog
 from .inputs import enable_dpi_awareness, make_backend
 from .minibar import MiniBar
+from .vision import template_path
 from . import theme
-from .sequence import STEP_TYPES, Sequence, SequenceRunner, default_step, describe_step
+from .sequence import (
+    STEP_TYPES, Sequence, SequenceRunner, default_step, describe_step, keys_pressed, risky_keys,
+)
 
 try:
     import winsound
 except ImportError:  # not Windows
     winsound = None
+
+
+def risky_keys_in_file(path: str) -> list[str]:
+    """System-key steps in a sequence file that hasn't allowed them yet."""
+    try:
+        seq = Sequence.load(path)
+    except Exception:
+        return []
+    return [] if seq.allow_system_keys else risky_keys(seq)
 
 
 class Bridge(QObject):
@@ -45,6 +58,7 @@ class Bridge(QObject):
     seq_step = Signal(int, int)
     seq_loop = Signal(int, float)
     hotkey = Signal(str)
+    update_result = Signal(object)
 
 
 def _icon() -> QIcon:
@@ -76,6 +90,8 @@ class MainWindow(QMainWindow):
         self.setMinimumHeight(400)
 
         self.settings = load_settings()
+        settings_problem = _config.LAST_LOAD_PROBLEM
+        self._settings_reset = False
         self.backend, backend_err = make_backend()
         self.bridge = Bridge()
         self._hotkey_handles = []
@@ -85,8 +101,9 @@ class MainWindow(QMainWindow):
         self.seq_path: str | None = None
         self.seq_dirty = False
 
-        self.clicker = ClickEngine(self.backend, self.bridge.clicker_state.emit, self.bridge.clicker_count.emit)
-        self.afk = AfkEngine(self.backend, self.bridge.afk_state.emit)
+        self.clicker = ClickEngine(self.backend, self.bridge.clicker_state.emit, self.bridge.clicker_count.emit,
+                                   on_error=self.bridge.log.emit)
+        self.afk = AfkEngine(self.backend, self.bridge.afk_state.emit, on_error=self.bridge.log.emit)
         self.runner: SequenceRunner | None = None
         self.capture = CaptureHelper(self._get_screen, lambda: self.capture_delay.value(), self)
 
@@ -107,7 +124,11 @@ class MainWindow(QMainWindow):
             pass
         self._load_initial_sequence()
         self._bind_hotkeys()
+        KeyCaptureDialog.pause_hotkeys = self._unbind_hotkeys
+        KeyCaptureDialog.resume_hotkeys = self._bind_hotkeys
 
+        if settings_problem:
+            self.log(settings_problem)
         if backend_err is not None:
             self.log(f"Mouse/keyboard control unavailable ({backend_err}). "
                      "Install requirements and, on Linux, run as root.")
@@ -612,6 +633,11 @@ class MainWindow(QMainWindow):
         def set_():
             k = KeyCaptureDialog.ask(self, "Press the new hotkey", allow_clear=False)
             if k:
+                clash = self._hotkey_clash(key, k)
+                if clash:
+                    QMessageBox.warning(self, "Hotkey in use", f"{k.upper()} is already used for {clash}. "
+                                        "Pick a different key.")
+                    return
                 edit.setText(k)
                 self.settings[key] = k
                 self._bind_hotkeys()
@@ -622,6 +648,19 @@ class MainWindow(QMainWindow):
         row.addWidget(b)
         row.addStretch()
         return row, edit
+
+    HOTKEY_NAMES = {"hotkey": "Start/stop clicker", "sequence_hotkey": "Start/stop automation",
+                    "panic_hotkey": "Stop everything"}
+
+    def _hotkey_clash(self, key: str, combo: str) -> str | None:
+        """Name of whatever already uses ``combo`` (another hotkey or the hold key), or None."""
+        c = combo.strip().lower()
+        for other, label in self.HOTKEY_NAMES.items():
+            if other != key and str(self.settings.get(other, "")).strip().lower() == c:
+                return label
+        if hasattr(self, "hold_key") and self.hold_key.text().strip().lower() == c:
+            return "the clicker's hold key"
+        return None
 
     def _settings_tab(self):
         s = self.settings
@@ -827,6 +866,7 @@ class MainWindow(QMainWindow):
         b.seq_step.connect(self._on_seq_step)
         b.seq_loop.connect(self._on_seq_loop)
         b.hotkey.connect(self._on_hotkey)
+        b.update_result.connect(self._on_update_result)
 
     def _on_click_count(self, n):
         self.lbl_clicks.setText(f"{n:,}")
@@ -846,10 +886,13 @@ class MainWindow(QMainWindow):
         if self.chk_notif.isChecked() and self.tray.isVisible():
             self.tray.showMessage(APP_NAME, msg, QSystemTrayIcon.Information, 1200)
 
-    def _bind_hotkeys(self):
+    def _unbind_hotkeys(self):
         for h in self._hotkey_handles:
             self.backend.remove_hotkey(h)
         self._hotkey_handles = []
+
+    def _bind_hotkeys(self):
+        self._unbind_hotkeys()
         for name in ("hotkey", "sequence_hotkey", "panic_hotkey"):
             combo = self.settings.get(name)
             if not combo:
@@ -881,7 +924,13 @@ class MainWindow(QMainWindow):
     # ================================================================ clicker
     def _click_config(self) -> ClickConfig:
         fixed = (self.fx.value(), self.fy.value()) if self.loc_fixed.isChecked() else None
+        try:
+            corner = tuple(self._get_screen().offset())
+        except Exception:
+            corner = (0, 0)
         return ClickConfig(
+            failsafe=self.failsafe.isChecked(),
+            corner=corner,
             button=self.mb.currentText().lower(),
             clicks_per_event=2 if self.click_type.currentText() == "Double" else 1,
             interval_s=self.interval.value() / 1000.0,
@@ -912,6 +961,8 @@ class MainWindow(QMainWindow):
     def _on_clicker_state(self, running):
         self._set_clicker_ui(running)
         self._notify("Clicking started" if running else f"Clicking stopped ({self.clicker.count:,} clicks)", running)
+        if not running and self.clicker.stopped_by_failsafe:
+            self.log("Mouse moved to the top-left corner or away from the click spot: failsafe stop.")
         self.log("Clicker started" if running else f"Clicker stopped after {self.clicker.count:,} clicks")
 
     def _set_clicker_ui(self, running):
@@ -940,6 +991,10 @@ class MainWindow(QMainWindow):
 
     def _set_hold_key(self):
         k = KeyCaptureDialog.ask(self, "Key to hold while clicking")
+        if k and self._hotkey_clash("hold_key", k):
+            QMessageBox.warning(self, "Key in use", f"{k.upper()} is one of the app's hotkeys, so holding it "
+                                "would start or stop things. Pick a different key.")
+            return
         if k is not None:
             self.hold_key.setText(k)
 
@@ -979,8 +1034,14 @@ class MainWindow(QMainWindow):
             if not st.get("enabled", True):
                 continue
             tpl = st.get("template")
-            if "template" in st and (not tpl or not os.path.exists(os.path.join(TEMPLATES_DIR, tpl))):
-                problems.append(f"Step {i}: image '{tpl}' is missing from the templates folder")
+            if "template" in st:
+                try:
+                    ok = bool(tpl) and os.path.isfile(template_path(TEMPLATES_DIR, tpl))
+                except ValueError:
+                    problems.append(f"Step {i}: image '{tpl}' must be inside the templates folder")
+                    continue
+                if not ok:
+                    problems.append(f"Step {i}: image '{tpl}' is missing from the templates folder")
         if not any(st.get("enabled", True) for st in seq.steps):
             problems.append("The sequence has no enabled steps")
         return problems
@@ -992,6 +1053,8 @@ class MainWindow(QMainWindow):
         if self.clicker.running:
             self.clicker.stop(wait=True)
         problems = self._validate_sequence(self.seq)
+        if not problems and not self._confirm_system_keys(self.seq, from_hotkey):
+            return
         if problems:
             msg = "\n".join(problems)
             self.log("Cannot start: " + msg.replace("\n", "; "))
@@ -1016,6 +1079,24 @@ class MainWindow(QMainWindow):
         if not from_hotkey and not from_minibar and self.chk_min_start.isChecked():
             self.showMinimized()
         self.runner.start(copy.deepcopy(self.seq), start_at)
+
+    def _confirm_system_keys(self, seq: Sequence, from_hotkey: bool = False) -> bool:
+        """System keys (windows+r, alt+tab, ...) need an explicit OK once per sequence."""
+        risky = risky_keys(seq)
+        if not risky or seq.allow_system_keys:
+            return True
+        msg = ("This sequence presses keys that control Windows, not just the game:\n"
+               + "\n".join(risky)
+               + "\n\nThese can open programs or switch windows. Allow them for this sequence?")
+        if from_hotkey:
+            self.log("Cannot start: the sequence uses system keys (" + "; ".join(risky)
+                     + "). Start it from the window once to allow them.")
+            return False
+        if QMessageBox.warning(self, "System keys", msg, QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return False
+        seq.allow_system_keys = True
+        self.seq_dirty = True
+        return True
 
     def _on_seq_state(self, running):
         self._set_seq_ui(running)
@@ -1089,18 +1170,43 @@ class MainWindow(QMainWindow):
             files = sorted(f for f in os.listdir(SEQUENCES_DIR) if f.endswith(".json"))
             path = os.path.join(SEQUENCES_DIR, files[0]) if files else ""
         if path and os.path.isfile(path):
-            self._open_sequence(path)
+            self._open_sequence(path, check=bool(risky_keys_in_file(path)))
         else:
             self._set_sequence(Sequence(), None)
 
-    def _open_sequence(self, path):
+    def _open_sequence(self, path, check=True):
         try:
             seq = Sequence.load(path)
         except Exception as e:
             QMessageBox.warning(self, "Open sequence", f"Could not open {path}:\n{e}")
             return
+        if check and not self._confirm_untrusted(seq, path):
+            return
         self._set_sequence(seq, path)
         self.log(f"Loaded sequence '{seq.name}'")
+
+    def _confirm_untrusted(self, seq: Sequence, path: str) -> bool:
+        """Sequence files are macros: show what one presses before loading it
+        from outside the app's own sequences folder, or if it uses system keys."""
+        try:
+            inside = os.path.dirname(os.path.realpath(path)) == os.path.realpath(SEQUENCES_DIR)
+        except OSError:
+            inside = False
+        risky = risky_keys(seq)
+        if inside and (not risky or seq.allow_system_keys):
+            return True
+        keys = keys_pressed(seq)
+        msg = (f"'{seq.name}' has {len(seq.steps)} step(s) and presses these keys: "
+               f"{', '.join(keys) if keys else 'none'}.")
+        if risky:
+            msg += ("\n\nIt uses keys that control Windows, not just the game, and can open programs:\n"
+                    + "\n".join(risky))
+        msg += "\n\nOnly open sequences from people you trust. Open it?"
+        if QMessageBox.warning(self, "Check this sequence", msg, QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return False
+        if risky:
+            seq.allow_system_keys = True
+        return True
 
     def _set_sequence(self, seq, path):
         self.seq = seq
@@ -1313,13 +1419,25 @@ class MainWindow(QMainWindow):
         self.settings = copy.deepcopy(DEFAULTS)
         self.settings["last_sequence"] = last
         save_settings(self.settings, SETTINGS_FILE)
+        # The controls still show the old values until the restart, so don't
+        # let quitting write them back over the defaults.
+        self._settings_reset = True
         QMessageBox.information(self, "Reset", "Defaults restored. Restart the app to apply them everywhere.")
 
     def _open_folder(self):
-        webbrowser.open("file://" + app_dir())
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl.fromLocalFile(app_dir()))
 
     def _check_update(self):
-        try:
+        """Ask GitHub for the latest release on a worker thread so the window
+        stays responsive; the answer comes back through ``bridge.update_result``."""
+        if getattr(self, "_update_checking", False):
+            return
+        self._update_checking = True
+        self.statusBar().showMessage("Checking for updates…")
+
+        def work():
             import json
             import urllib.error
             import urllib.request
@@ -1328,18 +1446,32 @@ class MainWindow(QMainWindow):
                 headers={"Accept": "application/vnd.github+json", "User-Agent": "TPAutoClicker"})
             try:
                 with urllib.request.urlopen(req, timeout=6) as r:
-                    data = json.load(r)
+                    result = json.load(r)
             except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    QMessageBox.information(self, "Updates", "No releases have been published yet.")
-                    return
-                raise
+                result = "none" if e.code == 404 else e
+            except Exception as e:
+                result = e
+            self.bridge.update_result.emit(result)
+
+        threading.Thread(target=work, daemon=True, name="update-check").start()
+
+    def _on_update_result(self, data):
+        self._update_checking = False
+        try:
+            if data == "none":
+                QMessageBox.information(self, "Updates", "No releases have been published yet.")
+                return
+            if isinstance(data, Exception):
+                raise data
             latest = data.get("tag_name", "0")
             if _version_tuple(latest) > _version_tuple(VERSION):
                 if QMessageBox.question(self, "Update available",
                                         f"Version {latest} is available (you have {VERSION}). Open the download page?") \
                         == QMessageBox.Yes:
-                    webbrowser.open(data.get("html_url") or f"https://github.com/{REPO_OWNER}/{REPO_NAME}/releases")
+                    url = str(data.get("html_url") or "")
+                    if not url.startswith(f"https://github.com/{REPO_OWNER}/{REPO_NAME}/"):
+                        url = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/releases"
+                    webbrowser.open(url)
             else:
                 QMessageBox.information(self, "Updates", f"You're on the latest version ({VERSION}).")
         except Exception as e:
@@ -1361,16 +1493,51 @@ class MainWindow(QMainWindow):
 
     def _on_quit(self):
         self.minibar.hide()
-        self.clicker.stop()
+        # Wait for the workers so a held key is released and no click lands
+        # after the window is gone.
+        self.clicker.stop(wait=True)
         self.afk.stop()
         if self.runner is not None:
             self.runner.stop()
-        for h in self._hotkey_handles:
-            self.backend.remove_hotkey(h)
-        self._save_settings()
+            self.runner.join(1)
+        self._unbind_hotkeys()
+        if not self._settings_reset:
+            self._save_settings()
+
+
+LOG_FILE = os.path.join(app_dir(), "tpautoclicker.log")
+
+
+def _install_crash_log():
+    """The exe has no console, so write uncaught errors to a log file next to
+    it and tell the user, instead of failing silently."""
+    import traceback
+    from datetime import datetime
+
+    def write(kind, exc_type, exc, tb):
+        try:
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(f"\n{datetime.now():%Y-%m-%d %H:%M:%S} {kind}\n")
+                f.write("".join(traceback.format_exception(exc_type, exc, tb)))
+        except OSError:
+            pass
+
+    def hook(exc_type, exc, tb):
+        write("error", exc_type, exc, tb)
+        sys.__excepthook__(exc_type, exc, tb)
+        if QApplication.instance() is not None:
+            QMessageBox.critical(None, APP_NAME, f"Something went wrong: {exc}\n\nDetails were saved to {LOG_FILE}")
+
+    def thread_hook(args):
+        write(f"error in thread {args.thread.name if args.thread else '?'}",
+              args.exc_type, args.exc_value, args.exc_traceback)
+
+    sys.excepthook = hook
+    threading.excepthook = thread_hook
 
 
 def main():
+    _install_crash_log()
     enable_dpi_awareness()
     install_bundled_files()
     app = QApplication(sys.argv)

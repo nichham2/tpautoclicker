@@ -71,10 +71,21 @@ class KeyCaptureDialog(QDialog):
         self.result_key = qt_key_to_name(e.key(), e.modifiers())
         self.accept()
 
+    # Set by the main window: called before/after recording so the global
+    # hotkeys don't fire while the user presses the key they want to record.
+    pause_hotkeys: Callable[[], None] | None = None
+    resume_hotkeys: Callable[[], None] | None = None
+
     @staticmethod
     def ask(parent, title="Press a key", allow_clear=True) -> str | None:
         d = KeyCaptureDialog(parent, title, allow_clear)
-        return d.result_key if d.exec() == QDialog.Accepted else None
+        if KeyCaptureDialog.pause_hotkeys:
+            KeyCaptureDialog.pause_hotkeys()
+        try:
+            return d.result_key if d.exec() == QDialog.Accepted else None
+        finally:
+            if KeyCaptureDialog.resume_hotkeys:
+                KeyCaptureDialog.resume_hotkeys()
 
 
 # ---------------------------------------------------------------------------

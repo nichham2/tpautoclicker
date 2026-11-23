@@ -145,26 +145,59 @@ def _migrate(raw: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+_BOOL_WORDS = {"true": True, "1": True, "yes": True, "on": True,
+               "false": False, "0": False, "no": False, "off": False}
+
+# Set by load_settings when the file on disk could not be used, so the app can
+# tell the user instead of silently starting from defaults.
+LAST_LOAD_PROBLEM: str | None = None
+
+
+def _convert(default: Any, v: Any) -> Any:
+    """Coerce ``v`` to the type of ``default``; raises ValueError/TypeError."""
+    if isinstance(default, bool):
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)) and v in (0, 1):
+            return bool(v)
+        if isinstance(v, str) and v.strip().lower() in _BOOL_WORDS:
+            return _BOOL_WORDS[v.strip().lower()]
+        raise ValueError(f"not a true/false value: {v!r}")
+    if isinstance(default, float) and isinstance(v, int) and not isinstance(v, bool):
+        return v
+    if type(v) is type(default):
+        return v
+    return type(default)(v)
+
+
 def load_settings(path: str = SETTINGS_FILE) -> dict[str, Any]:
+    global LAST_LOAD_PROBLEM
+    LAST_LOAD_PROBLEM = None
     settings = copy.deepcopy(DEFAULTS)
     try:
         with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
-        if isinstance(raw, dict):
-            for k, v in _migrate(raw).items():
-                if k in DEFAULTS and type(v) is not type(DEFAULTS[k]) and not (
-                    isinstance(DEFAULTS[k], float) and isinstance(v, int)
-                ):
-                    try:
-                        v = type(DEFAULTS[k])(v)
-                    except (TypeError, ValueError):
-                        continue
-                settings[k] = v
+        if not isinstance(raw, dict):
+            raise ValueError("settings file is not a JSON object")
+        for k, v in _migrate(raw).items():
+            if k in DEFAULTS:
+                try:
+                    v = _convert(DEFAULTS[k], v)
+                except (TypeError, ValueError):
+                    continue
+            settings[k] = v
     except FileNotFoundError:
         pass
-    except (OSError, json.JSONDecodeError):
-        # A corrupt settings file should never stop the app from starting.
-        pass
+    except (OSError, ValueError, TypeError) as e:  # JSONDecodeError is a ValueError
+        # A corrupt settings file should never stop the app from starting, but
+        # keep a copy instead of overwriting it with defaults on exit.
+        backup = path + ".bad"
+        try:
+            os.replace(path, backup)
+            LAST_LOAD_PROBLEM = (f"settings.json could not be read ({e}); started with defaults. "
+                                 f"The old file was kept as {os.path.basename(backup)}.")
+        except OSError:
+            LAST_LOAD_PROBLEM = f"settings.json could not be read ({e}); started with defaults."
     return settings
 
 
