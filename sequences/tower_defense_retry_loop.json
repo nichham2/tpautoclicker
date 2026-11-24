@@ -1,6 +1,6 @@
 {
   "name": "Tower defense: retry loop",
-  "notes": "Built from the screen recording. Waits for the end-of-level popup (any result: LEVEL CLEARED, THE BASE DROWNED, ...) by looking for its RETRY button, clicks RETRY, waits for the setup screen, turns on 2X speed, then clicks START. Loops until stopped. If you start this while already on the setup screen, select step 3 and use 'Start from selected step'.",
+  "notes": "Built from the screen recording. Waits for the end-of-level popup (any result: LEVEL CLEARED, THE BASE DROWNED, ...) by looking for its RETRY button, clicks RETRY, waits for the setup screen, turns on 2X speed (only if it's off), then clicks START. Loops until stopped. If you start this while already on the setup screen, select step 3 and use 'Start from selected step'.",
   "reference_resolution": [
     1920,
     1080
@@ -32,11 +32,12 @@
     },
     {
       "type": "click_image",
-      "label": "Turn on 2X speed",
+      "label": "Turn on 2X speed (skipped if it's already on)",
       "template": "double_speed.png",
       "timeout": 5,
       "on_fail": "skip",
-      "delay_after": 0.4
+      "delay_after": 0.4,
+      "skip_if": "double_speed_on.png"
     },
     {
       "type": "click_image",

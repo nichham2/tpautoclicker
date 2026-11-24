@@ -241,3 +241,21 @@ def test_corrupt_settings_are_kept_as_backup(tmp_path):
     assert not p.exists()
     assert (tmp_path / "settings.json.bad").read_text() == "{not json"
     assert config.LAST_LOAD_PROBLEM and "settings.json.bad" in config.LAST_LOAD_PROBLEM
+
+
+# ---- picker screen matching (F-13) ----------------------------------------------
+def test_match_screen_mixed_dpi():
+    from tpac.editor import match_screen
+    # Primary 1920x1080 at 100%, second 2560x1440 at 150% to its right.
+    # Qt 6 keeps the second screen's origin at x=1920 but shrinks its size.
+    qt6 = [(0, 0, 1920, 1080, 1.0), (1920, 0, 1707, 960, 1.5)]
+    assert match_screen(qt6, (1920, 0, 2560, 1440)) == 1
+    assert match_screen(qt6, (0, 0, 1920, 1080)) == 0
+    # A platform that scales the origin too (1920 / 1.5 = 1280).
+    scaled = [(0, 0, 1920, 1080, 1.0), (1280, 0, 1707, 960, 1.5)]
+    assert match_screen(scaled, (1920, 0, 2560, 1440)) == 1
+    # Monitor to the left of the primary at 125%.
+    left = [(0, 0, 1920, 1080, 1.0), (-2560, 0, 2048, 1152, 1.25)]
+    assert match_screen(left, (-2560, 0, 2560, 1440)) == 1
+    # No screen of that size at that spot: don't guess.
+    assert match_screen(qt6, (5000, 0, 1920, 1080)) is None

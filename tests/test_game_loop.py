@@ -24,6 +24,22 @@ def frame(name):
 FRAMES = {k: frame(k) for k in ("in_game", "popup_level_cleared", "popup_base_drowned", "transition",
                                  "setup_screen", "start_fading")}
 
+# The 2X button in its "on" look (teal text), cut from the recording, and the
+# same frames with it pasted in, for a game that remembers the speed.
+SPEED_ON = load_image(os.path.join(TPL, "double_speed_on.png"))
+SPEED_AT = (1860, 124)
+
+
+def with_speed_on(img):
+    out = img.copy()
+    x, y = SPEED_AT
+    h, w = SPEED_ON.shape[:2]
+    out[y:y + h, x:x + w] = SPEED_ON
+    return out
+
+
+FRAMES_ON = {k: with_speed_on(FRAMES[k]) for k in ("in_game", "setup_screen", "start_fading")}
+
 # Button boxes measured from the recording (x0, y0, x1, y1)
 RETRY = (683, 708, 958, 764)
 RETRY_DROWNED = (688, 694, 948, 742)  # the failure popup sits a little higher
@@ -65,12 +81,13 @@ class FakeGame:
             self.state, self.ticks = "setup", 0
         elif self.state == "starting" and self.ticks >= 1:
             self.state, self.ticks = "playing", 0
+        frames = FRAMES_ON if self.speed_on else FRAMES
         return {
-            "playing": FRAMES["in_game"],
+            "playing": frames["in_game"],
             "popup": FRAMES[self.popup],
             "transition": FRAMES["transition"],
-            "setup": FRAMES["setup_screen"],
-            "starting": FRAMES["start_fading"],
+            "setup": frames["setup_screen"],
+            "starting": frames["start_fading"],
         }[self.state]
 
     # input backend interface
@@ -86,7 +103,7 @@ class FakeGame:
         if self.state == "popup" and inside(self.retry_box(), x, y):
             self.state, self.ticks = "transition", 0
         elif self.state == "setup" and inside(DOUBLE, x, y):
-            self.speed_on = True
+            self.speed_on = not self.speed_on  # it's a toggle, and the game remembers it
         elif self.state == "setup" and inside(START, x, y):
             self.state, self.ticks = "starting", 0
             self.levels_started += 1
@@ -192,3 +209,49 @@ def test_loop_handles_win_and_loss_popups():
     runner.join(timeout=60)
     assert runner.loops_done == 4, "\n".join(logs)
     assert game.levels_started == 4
+
+
+def speed_clicks(game):
+    return [ev for ev in game.events if ev[0] == "click" and ev[1] == "setup" and inside(DOUBLE, ev[2], ev[3])]
+
+
+def test_double_speed_is_turned_on_once_and_left_on():
+    """The game remembers 2X between levels, so clicking it every loop would
+    switch it off every other level. It must only be clicked while it's off."""
+    game = FakeGame()
+    logs = []
+    runner, seq = make_runner(game, logs)
+    seq.repeat = 4
+    runner.start(seq)
+    runner.join(timeout=60)
+    assert runner.loops_done == 4, "\n".join(logs)
+    assert game.speed_on
+    assert len(speed_clicks(game)) == 1
+    assert sum("not clicking" in line for line in logs) == 3
+
+
+def test_double_speed_already_on_is_not_clicked():
+    game = FakeGame()
+    game.speed_on = True
+    logs = []
+    runner, seq = make_runner(game, logs)
+    seq.repeat = 2
+    runner.start(seq)
+    runner.join(timeout=60)
+    assert runner.loops_done == 2
+    assert game.speed_on and not speed_clicks(game)
+
+
+@pytest.mark.parametrize("img, expect_on", [
+    (FRAMES["setup_screen"], False),          # recording, before 2X was clicked
+    (FRAMES_ON["setup_screen"], True),
+    (FRAMES["start_fading"], True),           # recording, after 2X was clicked
+    (FRAMES["in_game"], True),
+], ids=["setup-off", "setup-on", "start-on", "in-game-on"])
+def test_on_and_off_looks_are_told_apart(img, expect_on):
+    """Both looks clear the 0.8 threshold on each other; the runner compares
+    the two scores instead, which must favour the right one on every frame."""
+    m = Matcher(TPL, reference_height=1080, threshold=0.8)
+    off_s = m.find(img, "double_speed.png", threshold=-1.0).score
+    on_s = m.find(img, "double_speed_on.png", threshold=-1.0).score
+    assert (on_s > off_s) == expect_on, (off_s, on_s)

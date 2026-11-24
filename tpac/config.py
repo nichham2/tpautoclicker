@@ -59,6 +59,9 @@ _SUPERSEDED = {
     # tower_defense_retry_loop.json v4.0.0: waited for the LEVEL CLEARED title,
     # which missed other results such as THE BASE DROWNED.
     "9027050950f71ca2ab6862ccd5d9e0fc787c97589d664890cc467f7094fae4ad",
+    # the v4.0 version after the RETRY fix: clicked the 2X toggle every loop,
+    # which turned it off again whenever the game remembered the speed.
+    "b8fe81d393e701ec7991342abac763c23152948f18d4705e203cb46d84f3fa7a",
 }
 
 

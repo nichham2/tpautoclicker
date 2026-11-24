@@ -104,11 +104,17 @@ def test_install_bundled_files_copies_without_overwriting(tmp_path, monkeypatch)
     assert (app / "templates" / "b.png").read_bytes() == b"new"
 
 
-def test_unedited_old_bundled_sequence_is_upgraded(tmp_path, monkeypatch):
+import pytest  # noqa: E402
+
+
+# 850c8c7 = v4.0.0 (waited for the LEVEL CLEARED title); ac5bf60 = clicked the
+# 2X toggle every loop.
+@pytest.mark.parametrize("commit", ["850c8c7", "ac5bf60"])
+def test_unedited_old_bundled_sequence_is_upgraded(tmp_path, monkeypatch, commit):
     import subprocess
 
     import tpac.config as cfg
-    old = subprocess.run(["git", "show", "850c8c7:sequences/tower_defense_retry_loop.json"],
+    old = subprocess.run(["git", "show", f"{commit}:sequences/tower_defense_retry_loop.json"],
                          cwd=ROOT, capture_output=True)
     if old.returncode != 0:
         import pytest

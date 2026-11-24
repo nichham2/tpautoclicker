@@ -91,6 +91,28 @@ class KeyCaptureDialog(QDialog):
 # ---------------------------------------------------------------------------
 # Screen capture helper
 # ---------------------------------------------------------------------------
+def match_screen(qt_screens, monitor, tolerance: int = 8):
+    """Index of the Qt screen showing ``monitor`` (left, top, width, height in
+    physical pixels, as mss reports it), or None.
+
+    ``qt_screens`` holds (x, y, width, height, device_pixel_ratio) from
+    ``QScreen.geometry()``. Qt 6 keeps each screen's top-left at its physical
+    position but divides the size by that screen's scale, so a 150% monitor at
+    x=1920 reports x=1920, not 1280. Older/other platforms scale the origin
+    too. Both are tried, and the size has to agree as well, so a monitor
+    whose position happens to line up with another's can't be mistaken for it.
+    """
+    left, top, width, height = monitor
+    best, best_err = None, None
+    for i, (x, y, w, h, dpr) in enumerate(qt_screens):
+        size_err = abs(w * dpr - width) + abs(h * dpr - height)
+        for ox, oy in ((x, y), (x * dpr, y * dpr)):
+            err = abs(ox - left) + abs(oy - top) + size_err
+            if best_err is None or err < best_err:
+                best, best_err = i, err
+    return best if best_err is not None and best_err <= tolerance else None
+
+
 class CaptureHelper(QObject):
     """Hides the app, waits, screenshots the game, then shows a picker."""
 
@@ -101,13 +123,17 @@ class CaptureHelper(QObject):
         self._picker = None
 
     def _qt_geometry_for(self, screen) -> QRect:
+        """The Qt screen that shows the monitor being captured, so the picker
+        overlay covers the right display."""
         try:
             left, top = screen.offset()
-            for qs in QGuiApplication.screens():
-                g = qs.geometry()
-                dpr = qs.devicePixelRatio()
-                if abs(g.x() * dpr - left) < 4 and abs(g.y() * dpr - top) < 4:
-                    return g
+            width, height = screen.size()
+            screens = QGuiApplication.screens()
+            rects = [(qs.geometry().x(), qs.geometry().y(), qs.geometry().width(), qs.geometry().height(),
+                      qs.devicePixelRatio()) for qs in screens]
+            i = match_screen(rects, (left, top, width, height))
+            if i is not None:
+                return screens[i].geometry()
         except Exception:
             pass
         return QGuiApplication.primaryScreen().geometry()
