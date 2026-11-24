@@ -68,6 +68,8 @@ STEP_TYPES: dict[str, dict[str, Any]] = {
             ("clicks", "int", 1, "1 = single click, 2 = double click"),
             ("until_gone", "bool", False, "Click again until the image disappears"),
             ("fallback_key", "key", "", "Press this key instead if the image is never found"),
+            ("skip_if", "template", "", "Don't click if this image matches better, e.g. the button's 'on' look "
+                                        "(for toggles like 2X speed)"),
             ("threshold", "float", 0.0, "Match confidence 0-1 (0 = use the global setting)"),
             ("region", "region", None, "Only search this part of the screen (optional)"),
         ],
@@ -239,7 +241,8 @@ def describe_step(step: dict[str, Any]) -> str:
     if t == "click_image":
         extra = " until gone" if step.get("until_gone") else ""
         fb = f", else press {step['fallback_key']}" if step.get("fallback_key") else ""
-        return f"{step.get('template')}{extra}{fb}"
+        sk = f", unless {step['skip_if']}" if step.get("skip_if") else ""
+        return f"{step.get('template')}{extra}{sk}{fb}"
     if t == "click":
         return f"at {tuple(step.get('pos', (0, 0)))} {step.get('button', 'left')}"
     if t == "key":
@@ -486,6 +489,9 @@ class SequenceRunner:
                     self.backend.tap(step["fallback_key"])
                     return
                 raise
+            if self._already_in_state(step, m):
+                self.log(f"  '{step['skip_if']}' is showing; not clicking")
+                return
             sx, sy = self._scale()
             ox, oy = self.screen.offset()
             dx, dy = step.get("offset") or (0, 0)
@@ -501,7 +507,7 @@ class SequenceRunner:
                 while self._clock() < gone_by:
                     self._sleep(min(self.scan_interval, 0.25))
                     m2 = self._find(step)
-                    if m2 is None:
+                    if m2 is None or self._already_in_state(step, m2):
                         return
                     m = m2
                 attempts += 1
@@ -525,6 +531,24 @@ class SequenceRunner:
 
         else:  # pragma: no cover - guarded by normalize_step
             raise StepFailed(f"Unknown step type {t}")
+
+    def _already_in_state(self, step, m) -> bool:
+        """For toggles: True if ``skip_if`` (e.g. the button's 'on' look)
+        matches better than the click image at the spot where it was found.
+
+        Both looks of a toggle are near-identical apart from colour, so both
+        usually clear the threshold; comparing the two scores is what tells
+        them apart."""
+        alt = step.get("skip_if")
+        if not alt:
+            return False
+        img = self.screen.grab()
+        pad_w, pad_h = m.w // 2 + 4, m.h // 2 + 4
+        near = (max(0, m.x - pad_w), max(0, m.y - pad_h), m.w + 2 * pad_w, m.h + 2 * pad_h)
+        other = self.matcher.find(img, alt, threshold=-1.0, region=near)
+        mine = self.matcher.find(img, step["template"], threshold=-1.0, region=near)
+        thr = self._threshold(step) or self.matcher.threshold
+        return other is not None and other.score >= thr and (mine is None or other.score > mine.score)
 
     def _guard_key(self, key: str) -> None:
         if is_system_key(key) and not (self.seq and self.seq.allow_system_keys):

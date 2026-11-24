@@ -77,7 +77,7 @@ for are PNGs in `templates/`.
 | --- | --- |
 | Wait until image appears | Polls the screen until a template shows up (or times out) |
 | Wait until image disappears | Polls until it goes away |
-| Find image and click it | Clicks the centre of the match (plus an optional offset). *Until gone* re-clicks if the game missed it. *Fallback key* presses a key if the image never appears |
+| Find image and click it | Clicks the centre of the match (plus an optional offset). *Until gone* re-clicks if the game missed it. *Fallback key* presses a key if the image never appears. *Skip if* names a second image (e.g. the button's "on" look) and skips the click when that one matches better, for toggle buttons |
 | Click a fixed position | Click at x, y |
 | Press a key | e.g. `space`, `enter`, `ctrl+s` |
 | Wait | Fixed time with optional random extra |
@@ -116,7 +116,7 @@ If something goes wrong, details are written to `tpautoclicker.log` next to the 
 1. Wait for the end-of-level popup, whatever its title (LEVEL CLEARED, THE BASE DROWNED, ...), by looking for its **RETRY** button (no time limit)
 2. Click **RETRY** (re-click until the popup goes away)
 3. Wait for the setup screen (the **START (SPACE)** button)
-4. Click **2X** to turn on double speed (skipped if not found; untick this step if your speed setting persists)
+4. Click **2X** to turn on double speed, only if it's off (white text; teal means it's already on). Skipped if not found
 5. Click **START** (press Space if the button can't be found)
 6. Repeat
 

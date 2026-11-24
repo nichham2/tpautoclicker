@@ -1033,6 +1033,12 @@ class MainWindow(QMainWindow):
         for i, st in enumerate(seq.steps, 1):
             if not st.get("enabled", True):
                 continue
+            if st.get("skip_if"):
+                try:
+                    if not os.path.isfile(template_path(TEMPLATES_DIR, st["skip_if"])):
+                        problems.append(f"Step {i}: image '{st['skip_if']}' is missing from the templates folder")
+                except ValueError:
+                    problems.append(f"Step {i}: image '{st['skip_if']}' must be inside the templates folder")
             tpl = st.get("template")
             if "template" in st:
                 try:

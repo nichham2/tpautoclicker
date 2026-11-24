@@ -29,6 +29,8 @@ def run() -> int:
         if hit is None or (hit.x, hit.y) != (700, 500):
             print(f"FAIL: template {name} not matched", file=sys.stderr)
             return 1
+        if step.get("skip_if"):
+            load_image(os.path.join(TEMPLATES_DIR, step["skip_if"]))  # raises if missing
 
     from PySide6.QtWidgets import QApplication
 
